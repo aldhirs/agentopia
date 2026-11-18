@@ -49,6 +49,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 .mono { font-family: var(--font-mono); }
 
+html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

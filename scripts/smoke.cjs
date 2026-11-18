@@ -17,6 +17,7 @@ require(path.join(__dirname, '..', 'out', 'main', 'main.js'));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const PERMISSION = process.env.SMOKE_PERMISSION === '1';
 const LOBBY = process.env.SMOKE_LOBBY === '1';
+const POLISH = process.env.SMOKE_POLISH === '1';
 const PROMPT = PERMISSION
   ? 'Launch ONE Explore subagent to read ./b/note.txt. After it reports, run the Bash command: touch smoke-permission.txt . Then reply: done'
   : 'In ONE message launch TWO Explore subagents in parallel: A lists the files in ./a, B reads ./b/note.txt. '
@@ -45,11 +46,18 @@ app.on('browser-window-created', (_e, win) => {
     try {
       await sleep(1500);
       await shot('01-lobby');
+      if (POLISH) {
+        await js(`document.querySelector('[aria-label="Pengaturan"]').click()`);
+        await sleep(600);
+        await shot('20-settings');
+        await js(`document.querySelector('[aria-label="Tutup pengaturan"]').click()`);
+        await sleep(300);
+      }
       await js(`(() => {
         const set = (sel, v) => { const el = document.querySelector(sel); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); };
         set('#f-dir', ${JSON.stringify(folder)});
-        set('#f-prompt', ${JSON.stringify(LOBBY ? 'Reply with just: hello from the lobby test' : PROMPT)});
-        set('#f-name', ${JSON.stringify(LOBBY ? 'uji-lobby' : '')});
+        set('#f-prompt', ${JSON.stringify(LOBBY || POLISH ? 'Reply with just: hello from the lobby test' : PROMPT)});
+        set('#f-name', ${JSON.stringify(LOBBY ? 'uji-lobby' : POLISH ? 'uji-polish' : '')});
       })()`);
       await sleep(400);
       await js(`[...document.querySelectorAll('.modes button')].find(b => b.textContent.includes(${JSON.stringify(PERMISSION ? 'Minta izin' : 'Ikut pengaturan')})).click()`);
@@ -57,6 +65,22 @@ app.on('browser-window-created', (_e, win) => {
       await shot('01b-lobby-filled');
       await sleep(300);
       await js(`document.querySelector('button.primary').click()`);
+      if (POLISH) {
+        await sleep(12000);
+        await js(`[...document.querySelectorAll('button')].find(b => b.textContent.includes('Hentikan sesi')).click()`);
+        await sleep(5000);
+        await shot('21-session-ended');
+        await js(`[...document.querySelectorAll('.ended button')].find(b => b.textContent.includes('Lanjutkan')).click()`);
+        await sleep(8000);
+        await shot('22-session-resumed');
+        const report = await js(`(async () => ({
+          ended: !!document.querySelector('.ended'),
+          sessions: (await window.office.listSessions()).map(s => [s.name, s.status]),
+          settings: await window.office.getSettings(),
+        }))()`);
+        console.log('report', JSON.stringify(report));
+        return;
+      }
       if (LOBBY) {
         await sleep(15000);
         await shot('11-lobby-session');

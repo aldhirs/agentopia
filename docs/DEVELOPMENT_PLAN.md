@@ -212,10 +212,20 @@ menyimpan screenshot kantor. Simulasi file unduhan: Gatekeeper menolak app (sesu
 Selesai jika: dmg hasil CI bisa dipasang dan menjalankan sesi di Mac yang tidak punya source code.
 
 ### Phase 6: Polish · M
-- [ ] Penanganan error: `claude` tidak ditemukan, login kedaluwarsa, proses crash, port bentrok.
-- [ ] Banyak sesi sekaligus; berhenti bersih saat app ditutup (tidak meninggalkan proses yatim).
-- [ ] Pengaturan: lokasi `claude`, tema, kecepatan animasi.
-- [ ] Peringatan pemakaian kuota bila datanya tersedia.
+- [x] Notifikasi macOS saat agent minta izin atau Lead selesai (hanya saat app tidak sedang difokuskan); klik notifikasi
+      membuka kantor sesi itu. Badge Dock = jumlah agent yang menunggu izin (`electron/state/attention.ts`).
+- [x] Konfirmasi saat keluar bila masih ada sesi berjalan; semua sesi dihentikan bersih (tidak ada proses `claude` tertinggal).
+- [x] Banner "Sesi berhenti" di kantor (termasuk kode keluar bila crash) dengan tombol Lanjutkan sesi.
+- [x] Lobby: tombol mulai nonaktif dengan alasan jelas bila Claude Code tidak ditemukan/belum login; tombol Cek ulang.
+- [x] Pengaturan (`userData/settings.json`): lokasi `claude`, kurangi animasi, ukuran font terminal, notifikasi on/off.
+- [x] ESLint (`npm run lint`) + dijalankan di CI. (Prettier tidak dipasang agar tidak memformat ulang seluruh kode.)
+- [x] Port bentrok tidak mungkin terjadi: penerima hooks memakai port acak.
+- [ ] Peringatan kuota: Claude Code tidak memberi data sisa kuota lewat hooks, jadi belum bisa dibuat.
+
+**Status: selesai (18 Nov 2026).** Bukti: unit test notifikasi memakai rekaman asli (1 notifikasi izin, tanpa notifikasi
+palsu saat Lead menunggu subagent) dan pengaturan; smoke `SMOKE_POLISH=1` (dialog pengaturan, hentikan sesi → banner →
+lanjutkan); `scripts/test-packaged.mjs` pada DMG baru: sesi asli jalan, app keluar, 0 proses `claude` tertinggal.
+Belum dilihat langsung: tampilan notifikasi macOS dan badge Dock (logikanya diuji, tampilannya bergantung izin notifikasi).
 
 ### Phase 7: Windows `.exe` (ditunda) · M
 Dikerjakan saat ada mesin/VM Windows untuk uji.

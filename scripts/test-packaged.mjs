@@ -73,12 +73,17 @@ try {
   }
   await shot('p2-office');
   report.ok = report.claude?.found && report.claude?.loggedIn && report.labels?.length > 1;
+  // Stop sessions from the app (as the quit dialog would), then quit and make sure nothing is left running.
+  await evaluate(`window.office.listSessions().then(l => Promise.all(l.filter(s => s.status === 'running').map(s => window.office.stopSession(s.id))))`);
 } finally {
   ws.close();
   spawnSync('osascript', ['-e', 'tell application "Virtual Office" to quit']);
-  await sleep(2000);
+  await sleep(3000);
+  const left = spawnSync('pgrep', ['-f', '127.0.0.1:[0-9]*/hook/']).stdout.toString().trim();
+  report.orphanProcesses = left ? left.split('\n').length : 0;
+  report.appStillRunning = spawnSync('pgrep', ['-f', 'Virtual Office.app/Contents/MacOS/Virtual Office']).stdout.toString().trim() !== '';
   fs.rmSync(userData, { recursive: true, force: true });
 }
 console.log(JSON.stringify({ ...report, claude: report.claude && { found: report.claude.found, version: report.claude.version, loggedIn: report.claude.loggedIn, path: report.claude.path } }, null, 2));
 console.log('screenshots in', outDir);
-process.exit(report.ok ? 0 : 1);
+process.exit(report.ok && report.orphanProcesses === 0 && !report.appStillRunning ? 0 : 1);

@@ -1,6 +1,6 @@
 // Renderer-side store: mirrors sessions, office state and hook history from the main process.
 import { reactive } from 'vue';
-import type { ClaudeInfo, HistoryEntry, HookRecord, OfficeEffect, OfficeState, SessionInfo } from '../../shared/types';
+import type { AppSettings, ClaudeInfo, HistoryEntry, HookRecord, OfficeEffect, OfficeState, SessionInfo } from '../../shared/types';
 
 const api = window.office;
 const HOOK_LIMIT = 3000;
@@ -15,7 +15,13 @@ export const office = reactive({
   currentId: null as string | null,
   history: [] as HistoryEntry[],
   recentFolders: [] as string[],
+  settings: null as AppSettings | null,
 });
+
+function applySettings(s: AppSettings) {
+  office.settings = s;
+  document.documentElement.classList.toggle('reduce-motion', s.reduceMotion);
+}
 
 const effectListeners = new Set<EffectListener>();
 export function onEffects(cb: EffectListener) {
@@ -39,9 +45,12 @@ export async function initOffice() {
     office.history = list;
     office.recentFolders = await api.recentFolders();
   });
-  const [claude, sessions, history, folders] = await Promise.all([
-    api.claudeInfo(), api.listSessions(), api.listHistory(), api.recentFolders(),
+  api.onSettings(applySettings);
+  api.onOpenSession((id) => { openSession(id); });
+  const [claude, sessions, history, folders, settings] = await Promise.all([
+    api.claudeInfo(), api.listSessions(), api.listHistory(), api.recentFolders(), api.getSettings(),
   ]);
+  applySettings(settings);
   office.claude = claude;
   office.sessions = sessions;
   office.history = history;
@@ -54,6 +63,16 @@ export async function openSession(id: string) {
   if (state) office.states[id] = state;
   office.hooks[id] = hooks;
   office.currentId = id;
+}
+
+export async function recheckClaude() {
+  office.claude = await api.claudeInfo();
+  return office.claude;
+}
+
+export async function updateSettings(patch: Partial<AppSettings>) {
+  applySettings(await api.setSettings(patch));
+  await recheckClaude();
 }
 
 export function leaveSession() {

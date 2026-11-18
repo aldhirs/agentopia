@@ -32,6 +32,8 @@ gulir ke bawah, klik **Open Anyway** untuk Virtual Office, dan konfirmasi.
   **Terminal** di dalam app. Pilih *Yes, I trust this folder*.
 - Di kantor: klik karakter untuk melihat detailnya; jendela Terminal dan detail bisa di-drag, minimize, maximize.
 - **Sesi sebelumnya** di lobby bisa dilanjutkan dengan tombol **Lanjutkan**.
+- Saat pertama ada agent minta izin, macOS menanyakan izin notifikasi untuk Virtual Office. Izinkan supaya kamu
+  diberi tahu walau app sedang tidak dibuka. Bisa dimatikan di **Pengaturan** (ikon roda gigi di lobby).
 
 ## Masalah umum
 

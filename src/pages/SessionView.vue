@@ -7,7 +7,7 @@ import StructuredLog from '../components/StructuredLog.vue';
 import OfficeFloor from '../components/office/OfficeFloor.vue';
 import AgentDetail from '../components/office/AgentDetail.vue';
 import CharacterBlob from '../components/office/CharacterBlob.vue';
-import { leaveSession, office } from '../stores/office';
+import { leaveSession, office, openSession } from '../stores/office';
 import { agentColor, agentTag } from '../lib/agentColor';
 import { STATUS_META } from '../lib/status';
 
@@ -72,6 +72,27 @@ function restore(key: 'term' | 'detail') {
   w.z = ++zTop;
 }
 
+const exited = computed(() => session.value?.status === 'exited');
+const canResume = computed(() => {
+  const h = office.history.find((x) => x.id === session.value?.historyId);
+  return !!h?.claudeSessionId && !office.sessions.some((x) => x.historyId === h.id && x.status === 'running');
+});
+const resuming = ref(false);
+const resumeError = ref('');
+async function resume() {
+  if (!session.value) return;
+  resuming.value = true;
+  resumeError.value = '';
+  try {
+    const info = await api.resumeSession(session.value.historyId);
+    await openSession(info.id);
+  } catch (e) {
+    resumeError.value = (e as Error).message;
+  } finally {
+    resuming.value = false;
+  }
+}
+
 const stopping = ref(false);
 async function stop() {
   stopping.value = true;
@@ -104,6 +125,16 @@ async function stop() {
           {{ stopping ? 'Menghentikan…' : 'Hentikan sesi' }}
         </button>
       </div>
+    </div>
+
+    <div v-if="exited" class="card ended" role="status">
+      <div>
+        <strong>Sesi berhenti{{ session?.exitCode ? ` (kode ${session.exitCode})` : '' }}.</strong>
+        <span> Percakapannya tersimpan.</span>
+        <span v-if="resumeError" class="err"> {{ resumeError }}</span>
+      </div>
+      <button v-if="canResume" type="button" class="resume" :disabled="resuming" @click="resume">{{ resuming ? 'Membuka…' : 'Lanjutkan sesi' }}</button>
+      <button type="button" @click="leaveSession">Ke lobby</button>
     </div>
 
     <div v-if="dock.length" class="card dock">
@@ -177,6 +208,10 @@ h1 { margin: 0; font-family: var(--font-display); font-size: 18px; font-weight: 
 .stop { min-height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line-2); background: #fff; color: var(--st-error-fg); font-weight: 500; cursor: pointer; }
 .stop:disabled { opacity: 0.6; cursor: default; }
 
+.ended { left: 50%; top: 16px; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 16px; font-size: 14px; max-width: calc(100% - 940px); min-width: 360px; }
+.ended button { min-height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line-2); background: #fff; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.ended .resume { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.ended .err { color: var(--st-error-fg); }
 .dock { right: 16px; top: 16px; padding: 8px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; max-width: calc(100% - 480px); }
 .dock button { min-height: 44px; padding: 0 12px; display: flex; align-items: center; gap: 8px; border-radius: 10px; border: 1px solid var(--line-2); background: #fff; font-weight: 600; font-size: 13px; cursor: pointer; }
 .dock-dot { width: 8px; height: 8px; border-radius: 50%; }

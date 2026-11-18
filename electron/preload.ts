@@ -21,6 +21,9 @@ const api: OfficeApi = {
   resumeSession: (historyId) => ipcRenderer.invoke('session:resume', historyId),
   removeHistory: (historyId) => ipcRenderer.invoke('history:remove', historyId),
   folderInfo: (cwd) => ipcRenderer.invoke('folder:info', cwd),
+  getSettings: () => ipcRenderer.invoke('settings:get'),
+  setSettings: (patch) => ipcRenderer.invoke('settings:set', patch),
+  pickFile: () => ipcRenderer.invoke('dialog:pick-file'),
   write: (id, data) => ipcRenderer.send('pty:write', id, data),
   resize: (id, cols, rows) => ipcRenderer.send('pty:resize', id, cols, rows),
   onPtyData: (cb) => listen('pty:data', cb),
@@ -29,6 +32,8 @@ const api: OfficeApi = {
   onHook: (cb) => listen('office:hook', cb),
   onSessions: (cb) => listen('sessions:changed', cb),
   onHistory: (cb) => listen('history:changed', cb),
+  onSettings: (cb) => listen('settings:changed', cb),
+  onOpenSession: (cb) => listen('ui:open-session', cb),
 };
 
 contextBridge.exposeInMainWorld('office', api);

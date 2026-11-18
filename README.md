@@ -13,6 +13,7 @@ Prasyarat: Node 20+, Claude Code terpasang dan sudah login (`claude auth status`
 npm install
 npm run dev        # buka app dengan hot reload
 npm test           # unit test
+npm run lint       # ESLint
 VO_E2E=1 npm test  # + uji end-to-end dengan sesi claude asli (memakai sedikit kuota)
 ```
 

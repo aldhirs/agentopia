@@ -16,7 +16,7 @@ export function prettyType(type: string): string {
 export function summarizeTool(tool: string, input: Record<string, unknown> = {}): string {
   const s = (v: unknown) => (typeof v === 'string' ? v : '');
   const base = (f: string) => f.split(/[\\/]/).pop() ?? f;
-  let detail = '';
+  let detail: string;
   switch (tool) {
     case 'Bash': detail = s(input.command); break;
     case 'Read': case 'Write': case 'Edit': case 'NotebookEdit': detail = base(s(input.file_path)); break;

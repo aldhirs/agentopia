@@ -23,6 +23,7 @@ run('SessionManager e2e', () => {
       bytes += d.length;
       screen = (screen + d).slice(-4000);
       // First run in a folder shows the workspace-trust screen ("No, exit" is preselected).
+      // eslint-disable-next-line no-control-regex -- strips ANSI escapes from terminal output
       if (!trusted && /trust\s*this\s*folder/i.test(screen.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, ''))) {
         trusted = true;
         setTimeout(() => { sm.write(id, '\x1b[B'); setTimeout(() => sm.write(id, '\r'), 300); }, 500);

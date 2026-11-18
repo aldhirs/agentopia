@@ -1,6 +1,7 @@
 <!-- The real Claude Code TUI, rendered with xterm.js and wired to the session's pty. -->
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { office } from '../stores/office';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
@@ -46,7 +47,7 @@ onMounted(() => {
     allowProposedApi: true,
     cursorBlink: true,
     fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: 13,
+    fontSize: office.settings?.terminalFontSize ?? 13,
     lineHeight: 1.2,
     scrollback: 10000,
     macOptionIsMeta: true,
@@ -89,6 +90,9 @@ onMounted(() => {
 });
 
 watch(() => props.sessionId, (id) => attach(id));
+watch(() => office.settings?.terminalFontSize, (size) => {
+  if (term && size) { term.options.fontSize = size; refit(); }
+});
 watch(() => props.visible, (v) => { if (v) requestAnimationFrame(() => { refit(); term?.focus(); }); });
 
 onBeforeUnmount(() => {

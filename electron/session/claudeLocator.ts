@@ -52,9 +52,18 @@ function run(file: string, args: string[]): Promise<string> {
 
 let cached: ClaudeInfo | undefined;
 
+let configuredPath = '';
+/** Path chosen in the app settings; empty = automatic. */
+export function setConfiguredClaudePath(p: string) {
+  if (p !== configuredPath) { configuredPath = p; cached = undefined; }
+}
+
 export async function locateClaude(force = false): Promise<ClaudeInfo> {
   if (cached && !force) return cached;
-  const override = process.env.VO_CLAUDE_BIN;
+  if (configuredPath && !isExecutable(configuredPath)) {
+    return (cached = { found: false, error: `Lokasi claude di Pengaturan tidak valid: ${configuredPath}` });
+  }
+  const override = configuredPath || process.env.VO_CLAUDE_BIN;
   const bin = (override && isExecutable(override) ? override : undefined)
     ?? candidates().find(isExecutable)
     ?? (await findOnPath());

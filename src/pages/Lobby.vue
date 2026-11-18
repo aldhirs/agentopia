@@ -4,7 +4,8 @@ import { computed, onMounted, ref, watch } from 'vue';
 import type { FolderInfo, HistoryEntry, PermissionMode, SessionInfo } from '../../shared/types';
 import { previewCommand } from '../../shared/claudeArgs';
 import CharacterBlob from '../components/office/CharacterBlob.vue';
-import { office, openSession } from '../stores/office';
+import SettingsDialog from '../components/SettingsDialog.vue';
+import { office, openSession, recheckClaude } from '../stores/office';
 import { agentColor, agentTag } from '../lib/agentColor';
 import { relativeTime, duration } from '../lib/time';
 
@@ -33,7 +34,14 @@ const command = computed(() => previewCommand({
   cwd: cwd.value, name: name.value || undefined, model: model.value || undefined,
   permissionMode: mode.value || undefined, worktree: worktree.value, prompt: prompt.value,
 }));
-const canStart = computed(() => !!cwd.value && folder.value?.exists !== false && !starting.value);
+const claudeReady = computed(() => !!office.claude?.found && office.claude.loggedIn !== false);
+const canStart = computed(() => claudeReady.value && !!cwd.value && folder.value?.exists !== false && !starting.value);
+const showSettings = ref(false);
+const rechecking = ref(false);
+async function recheck() {
+  rechecking.value = true;
+  try { await recheckClaude(); } finally { rechecking.value = false; }
+}
 
 let infoSeq = 0;
 watch(cwd, async (dir) => {
@@ -133,8 +141,16 @@ watch(() => office.recentFolders, (f) => { if (!cwd.value && f.length) cwd.value
         <h1>Virtual Office</h1>
       </div>
       <span v-if="office.claude?.found && office.claude.loggedIn" class="chip ok"><span class="pulse" />Claude Code {{ office.claude.version }} · login {{ office.claude.subscriptionType ?? office.claude.authMethod }}</span>
-      <span v-else-if="office.claude?.found" class="chip warn">Claude Code belum login · jalankan <code>claude</code> lalu <code>/login</code> di terminal</span>
-      <span v-else-if="office.claude" class="chip bad">{{ office.claude.error }}</span>
+      <template v-else-if="office.claude">
+        <span class="chip" :class="office.claude.found ? 'warn' : 'bad'">
+          <template v-if="office.claude.found">Claude Code belum login · jalankan <code>claude</code> lalu <code>/login</code> di Terminal</template>
+          <template v-else>{{ office.claude.error }}</template>
+        </span>
+        <button type="button" class="small" :disabled="rechecking" @click="recheck">{{ rechecking ? 'Mengecek…' : 'Cek ulang' }}</button>
+      </template>
+      <button type="button" class="small gear" aria-label="Pengaturan" @click="showSettings = true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
+      </button>
     </header>
 
     <section class="banner" aria-labelledby="team-title">
@@ -216,6 +232,7 @@ watch(() => office.recentFolders, (f) => { if (!cwd.value && f.length) cwd.value
         </div>
 
         <p v-if="error" class="field-error" role="alert">{{ error }}</p>
+        <p v-if="!claudeReady && office.claude" class="field-error">Sesi belum bisa dimulai: {{ office.claude.found ? 'Claude Code belum login.' : 'Claude Code tidak ditemukan (atur lokasinya di Pengaturan).' }}</p>
         <div class="actions">
           <p class="sub">Tanpa API key · masuk kuota langganan Claude kamu</p>
           <button type="button" class="primary" :disabled="!canStart" @click="start">
@@ -266,6 +283,7 @@ watch(() => office.recentFolders, (f) => { if (!cwd.value && f.length) cwd.value
         </section>
       </div>
     </main>
+    <SettingsDialog v-if="showSettings" @close="showSettings = false" />
   </div>
 </template>
 
@@ -279,6 +297,8 @@ h1 { margin: 0; font-family: var(--font-display); font-size: 20px; font-weight: 
 .chip.ok { background: var(--st-done-bg); color: var(--st-done-fg); }
 .chip.warn { background: var(--st-wait-bg); color: var(--st-wait-fg); }
 .chip.bad { background: var(--st-error-bg); color: var(--st-error-fg); }
+.small { min-height: 36px; padding: 0 12px; font-size: 13px; }
+.gear { width: 40px; padding: 0; }
 .pulse { width: 8px; height: 8px; border-radius: 50%; background: #15803d; animation: pulse 1.4s ease-in-out infinite; }
 
 .banner { margin: 24px 32px 0; padding: 22px 28px 0; border-radius: 20px; background-color: var(--floor); background-image: repeating-linear-gradient(90deg, rgba(120, 90, 50, 0.07) 0 2px, transparent 2px 64px); }

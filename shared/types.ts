@@ -142,6 +142,14 @@ export interface FolderInfo {
   team: TeamMember[];
 }
 
+export interface AppSettings {
+  /** Absolute path to the claude binary; empty = find automatically. */
+  claudePath: string;
+  reduceMotion: boolean;
+  terminalFontSize: number;
+  notifications: boolean;
+}
+
 /** API exposed to the renderer by the preload script (window.office). */
 export interface OfficeApi {
   claudeInfo(): Promise<ClaudeInfo>;
@@ -157,6 +165,9 @@ export interface OfficeApi {
   resumeSession(historyId: string): Promise<SessionInfo>;
   removeHistory(historyId: string): Promise<void>;
   folderInfo(cwd: string | null): Promise<FolderInfo>;
+  getSettings(): Promise<AppSettings>;
+  setSettings(patch: Partial<AppSettings>): Promise<AppSettings>;
+  pickFile(): Promise<string | null>;
   write(id: string, data: string): void;
   resize(id: string, cols: number, rows: number): void;
   onPtyData(cb: (id: string, data: string) => void): () => void;
@@ -165,4 +176,7 @@ export interface OfficeApi {
   onHook(cb: (record: HookRecord) => void): () => void;
   onSessions(cb: (sessions: SessionInfo[]) => void): () => void;
   onHistory(cb: (history: HistoryEntry[]) => void): () => void;
+  onSettings(cb: (settings: AppSettings) => void): () => void;
+  /** Main process asks the UI to show a session (e.g. after clicking a notification). */
+  onOpenSession(cb: (sessionId: string) => void): () => void;
 }
