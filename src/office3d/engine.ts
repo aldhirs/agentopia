@@ -6,6 +6,7 @@ import { CharacterRig, STATUS_3D } from './character';
 import { buildEnvironment, type Environment, type SeatDevice } from './environment';
 import { extraAnchor, LEAD_ANCHOR, nextSeats3d, personFromAnchor, seatPose, type SeatRef } from './layout';
 import { disposeShared, disposeTree, sphere } from './kit';
+import { NavGrid } from './nav';
 
 export interface EngineStats {
   fps: number;
@@ -22,6 +23,12 @@ export interface EngineStats {
 interface Flight { mesh: THREE.Mesh; line: THREE.Line; from: THREE.Vector3; to: THREE.Vector3; start: number; dur: number }
 
 const DEFAULT_ANGLE = -0.35;
+/** Frame rate while only idle animations play (typing, breathing, blinking). */
+const IDLE_FPS = 24;
+/** Frame rate while the app window is not focused. */
+const BACKGROUND_FPS = 8;
+/** Idle poses barely move shadows; refresh them this often instead of every frame. */
+const IDLE_SHADOW_MS = 600;
 
 export class OfficeEngine {
   private renderer: THREE.WebGLRenderer;
@@ -31,6 +38,8 @@ export class OfficeEngine {
   private chars = new Map<string, CharacterRig>();
   private seats: Record<string, SeatRef> = {};
   private extras = new Map<number, SeatDevice>();
+  /** Walkable floor; built once (furniture is static), extra floor laptops are added as they appear. */
+  private nav = new NavGrid();
   private flights: Flight[] = [];
   private raycaster = new THREE.Raycaster();
   private raf = 0;
@@ -47,6 +56,8 @@ export class OfficeEngine {
   private onFocus = () => { this.focused = true; this.dirty = true; };
   private onBlur = () => { this.focused = false; };
   private dirty = true;
+  private shadowDirty = true;
+  private lastShadow = 0;
   private frameTimes: number[] = [];
   private lastFrame = 0;
   private maxPixelRatio = Math.min(window.devicePixelRatio || 1, 1.75);
@@ -56,10 +67,13 @@ export class OfficeEngine {
 
   constructor(private canvas: HTMLCanvasElement, opts: { reduceMotion?: boolean } = {}) {
     this.reduceMotion = !!opts.reduceMotion;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    // MSAA is barely visible on HiDPI screens but costly; integrated GPU is plenty for this scene.
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: (window.devicePixelRatio || 1) < 1.5, powerPreference: 'default' });
     this.renderer.setPixelRatio(this.pixelRatio);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Furniture and light never move: shadows are re-rendered only when characters change (see frame()).
+    this.renderer.shadowMap.autoUpdate = false;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
 
@@ -71,7 +85,7 @@ export class OfficeEngine {
     const sun = new THREE.DirectionalLight('#FFF1D6', 2.2);
     sun.position.set(7, 12, 6);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.mapSize.set(1024, 1024);
     Object.assign(sun.shadow.camera, { left: -13, right: 13, top: 13, bottom: -13 });
     sun.shadow.bias = -0.0004;
     this.scene.add(sun);
@@ -86,7 +100,9 @@ export class OfficeEngine {
   sync(state: OfficeState) {
     const subs = state.order.filter((id) => id !== 'lead').map((id) => state.agents[id]);
     this.seats = nextSeats3d(this.seats, subs.map((a) => ({ id: a.id, done: a.status === 'done' })));
-    const now = performance.now();
+    // Light seats (and register extra floor laptops as obstacles) before planning walks.
+    this.lightSeats(state);
+    this.shadowDirty = true;
     const present = new Set(state.order);
 
     for (const [id, rig] of this.chars) {
@@ -103,11 +119,17 @@ export class OfficeEngine {
       }
       rig.setStatus(a.status);
       const pose = id === 'lead' ? { ...personFromAnchor(LEAD_ANCHOR), type: 'desk' as const } : seatPose(this.seats[id]);
-      const at = rig.root.position;
-      const moved = isNew || Math.abs(at.x - pose.x) > 0.01 || Math.abs(at.z - pose.z) > 0.01;
-      if (moved) rig.placeAt(pose, now, isNew || this.reduceMotion ? 0 : 1600);
+      const cur = rig.seat;
+      const moved = isNew || !cur || Math.abs(cur.x - pose.x) > 0.01 || Math.abs(cur.z - pose.z) > 0.01;
+      if (!moved) continue;
+      if (isNew || this.reduceMotion || !cur) { rig.placeAt(pose); continue; }
+      // Stand up next to the current seat (or keep walking from here), walk around the furniture,
+      // and sit down from the stand spot of the new seat.
+      const start = rig.seated ? this.nav.standPoint(cur) : { x: rig.root.position.x, z: rig.root.position.z };
+      const end = this.nav.standPoint(pose);
+      rig.walkTo(pose, this.nav.path(start, end));
     }
-    this.lightSeats(state);
+
     this.dirty = true;
   }
 
@@ -133,6 +155,7 @@ export class OfficeEngine {
       void id;
     }
     for (const [idx, dev] of this.extras) dev.group.visible = paint(dev, occupant.get(`extra:${idx}`));
+    this.nav.setExtras([...this.extras].filter(([, dev]) => dev.group.visible).map(([idx]) => idx));
   }
 
   effects(list: OfficeEffect[]) {
@@ -217,10 +240,13 @@ export class OfficeEngine {
   }
 
   private frame(now: number) {
-    const animating = !this.reduceMotion || this.flights.length > 0 || [...this.chars.values()].some((c) => c.isMoving);
-    if (!animating && !this.dirty) { this.lastFrame = now; return; }
-    // Cap the frame rate; when the app window is in the background, 15 FPS is enough.
-    const cap = this.focused ? this.maxFps : Math.min(this.maxFps, 15);
+    // Render on demand: full rate only while something travels (walks, flights, orbit, user input),
+    // a low rate for idle animations, nothing at all when nothing changes (reduced motion).
+    const walking = [...this.chars.values()].some((c) => c.isMoving);
+    const moving = walking || this.flights.length > 0 || (this.autoRotate && !this.reduceMotion);
+    if (!moving && this.reduceMotion && !this.dirty) { this.lastFrame = now; return; }
+    let cap = moving || this.dirty ? this.maxFps : Math.min(this.maxFps, IDLE_FPS);
+    if (!this.focused) cap = Math.min(cap, BACKGROUND_FPS);
     if (now - this.lastRender < 1000 / cap - 2) return;
     const dtSec = this.lastRender ? Math.min(0.1, (now - this.lastRender) / 1000) : 0;
     this.lastRender = now;
@@ -235,6 +261,11 @@ export class OfficeEngine {
       (f.mesh.userData.curve as THREE.QuadraticBezierCurve3).getPoint(Math.min(1, k), f.mesh.position);
       return true;
     });
+    if (this.shadowDirty || walking || (!this.reduceMotion && now - this.lastShadow > IDLE_SHADOW_MS)) {
+      this.renderer.shadowMap.needsUpdate = true;
+      this.shadowDirty = false;
+      this.lastShadow = now;
+    }
     this.renderer.render(this.scene, this.camera);
     this.dirty = false;
     if (this.lastFrame) {

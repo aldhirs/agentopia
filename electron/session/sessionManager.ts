@@ -29,6 +29,8 @@ interface Live {
   historyId: string;
 }
 
+/** Terminal output kept for an ended session. */
+const ENDED_BUFFER = 200_000;
 const BUFFER_LIMIT = 2_000_000;
 const HOOK_LIMIT = 3000;
 
@@ -141,18 +143,26 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       env: await claudeEnv({ [TOKEN_ENV]: token }),
     });
     live.proc = proc;
-    proc.onData((d) => {
+    // Over the limit, drop the older half at once (cheaper than trimming on every chunk).
+    const onData = proc.onData((d) => {
       live.buffer += d;
       if (live.buffer.length > BUFFER_LIMIT) live.buffer = live.buffer.slice(-BUFFER_LIMIT / 2);
       this.emit('data', id, d);
     });
-    proc.onExit(({ exitCode, signal }) => {
+    const onExit = proc.onExit(({ exitCode, signal }) => {
       const ranMs = Date.now() - now;
       // Terminal output can contain private work; only keep it for sessions that died at startup,
       // where it is the error message we need to diagnose the launch.
       log('session.exit', { id, exitCode, signal, ranMs, startupOutput: ranMs < 15000 ? stripAnsi(live.buffer).slice(-400) : undefined });
       live.info = { ...live.info, status: 'exited', exitCode };
       live.proc = undefined;
+      onData.dispose();
+      onExit.dispose();
+      // Windows: close the pseudo console too, or its conhost.exe stays behind after claude exits.
+      // (Not on macOS/Linux: there kill() after exit could signal an unrelated process reusing the pid.)
+      if (process.platform === 'win32') { try { proc.kill(); } catch { /* already closed */ } }
+      // An ended session only needs the tail of its output (shown when you reopen it).
+      if (live.buffer.length > ENDED_BUFFER) live.buffer = live.buffer.slice(-ENDED_BUFFER);
       fs.rmSync(settingsFile, { force: true });
       this.hooks.unregister(id);
       this.applyHook(live, { hook_event_name: 'SessionEnd' });

@@ -2,7 +2,8 @@
 // lesehan, bean bags, billiard, coffee bar. Returns per-seat "devices" (screens + glow)
 // so the engine can light them in the colour of whoever sits there.
 import * as THREE from 'three';
-import { BEANBAGS, DESK_ANCHORS, FLOOR_ANCHORS, LEAD_ANCHOR, LESEHAN, PODS, type Anchor } from './layout';
+import { BEAN_CIRCLE, BEANBAGS, DESK_ANCHORS, FLOOR_ANCHORS, LEAD_ANCHOR, LESEHAN, PODS, type Anchor } from './layout';
+import { PLANTS } from './nav';
 import { box, canvasTexture, cyl, labelSprite, mat, mesh, sphere } from './kit';
 
 export interface SeatDevice {
@@ -58,8 +59,8 @@ export function buildEnvironment(scene: THREE.Scene): Environment {
   rug(-1.2, -2.7, 10.6, 3.9, mat('#9FB3C8', 0.98));
   rug(LEAD_ANCHOR.x + 0.15, LEAD_ANCHOR.z - 0.05, 5.3, 4.0, mat('#C9B48F', 0.98));
   rug(LESEHAN.x, LESEHAN.z, 3.6, 2.6, new THREE.MeshStandardMaterial({ map: stripes, roughness: 0.98 }));
-  const bbRug = add(mesh(new THREE.CircleGeometry(1.7, 40), mat('#F2C14E', 0.98), false));
-  bbRug.rotation.x = -Math.PI / 2; bbRug.position.set(BEANBAGS[0].x + 0.4, 0.007, BEANBAGS[0].z - 0.2);
+  const bbRug = add(mesh(new THREE.CircleGeometry(2.0, 48), mat('#F2C14E', 0.98), false));
+  bbRug.rotation.x = -Math.PI / 2; bbRug.position.set(BEAN_CIRCLE.x, 0.007, BEAN_CIRCLE.z);
 
   // Walls: exposed brick + neon + windows.
   const brick = canvasTexture(512, 256, (g, w, h) => {
@@ -191,7 +192,7 @@ export function buildEnvironment(scene: THREE.Scene): Environment {
     const rest = add(mesh(sphere(0.42, 24, 16), m)); rest.scale.set(1, 0.85, 0.55);
     rest.position.set(b.x - Math.sin(b.rotY) * 0.38, 0.52, b.z - Math.cos(b.rotY) * 0.38); rest.rotation.y = b.rotY;
   }
-  add(labelSprite('Bean bag', '#F2C14E', 1.1)).position.set(BEANBAGS[0].x + 0.6, 1.8, BEANBAGS[0].z - 0.2);
+  add(labelSprite('Bean bag', '#F2C14E', 1.1)).position.set(BEAN_CIRCLE.x, 1.6, BEAN_CIRCLE.z);
 
   // Billiard table.
   const BX = 5.9, BZ = 1.5;
@@ -236,7 +237,7 @@ export function buildEnvironment(scene: THREE.Scene): Environment {
   nb.rotation.y = Math.PI / 2; nb.position.set(-10.98, 1.6, 0.6);
 
   // Plants.
-  [[-10.3, -5.9], [4.4, -5.9], [10.2, -1.6], [-10.2, 3.6], [10.2, 3.6], [-7.6, -5.9], [3.2, 3.6], [-8.4, 3.4]].forEach(([x, z], i) => {
+  PLANTS.forEach(([x, z], i) => {
     add(mesh(cyl(0.26, 0.2, 0.42, 20), mat(['#F2C14E', '#F78154', '#FFFFFF', '#4D9078'][i % 4], 0.8))).position.set(x, 0.21, z);
     const leaf = add(mesh(sphere(0.5, 24, 16), mat(i % 2 ? '#5E9E5A' : '#77B36E', 0.9))); leaf.position.set(x, 0.85, z); leaf.scale.set(1, 1.2, 1);
   });

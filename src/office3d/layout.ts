@@ -14,11 +14,16 @@ export interface Anchor { x: number; z: number; rotY: number }
 
 export const LEAD_ANCHOR: Anchor = { x: 7.6, z: -4.4, rotY: 0 };
 export const LESEHAN = { x: -6.3, z: 1.9 };
-export const BEANBAGS: Array<{ x: number; z: number; rotY: number; color: string }> = [
-  { x: -1.3, z: 2.5, rotY: 0, color: '#F78154' },
-  { x: 0.0, z: 1.9, rotY: -0.7, color: '#5DA9E9' },
-  { x: -0.2, z: 3.2, rotY: -1.6, color: '#4D9078' },
-];
+/** Bean bags stand in a conversation circle, facing its centre, with room to walk between them. */
+export const BEAN_CIRCLE = { x: -1.0, z: 2.2, r: 1.45 };
+export const BEANBAGS: Array<{ x: number; z: number; rotY: number; color: string }> = (
+  [[Math.PI, '#F78154'], [Math.PI / 3, '#5DA9E9'], [-Math.PI / 3, '#4D9078']] as Array<[number, string]>
+).map(([a, color]) => ({
+  x: BEAN_CIRCLE.x + Math.sin(a) * BEAN_CIRCLE.r,
+  z: BEAN_CIRCLE.z + Math.cos(a) * BEAN_CIRCLE.r,
+  rotY: a + Math.PI,
+  color,
+}));
 
 function pod(cx: number, cz: number): Anchor[] {
   return [

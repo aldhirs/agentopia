@@ -1,4 +1,5 @@
-<!-- Floating window over the office: minimize, maximize/restore and drag by its header.
+<!-- Floating window over the office: minimize, maximize/restore, drag by its header and
+     resize from any edge or corner.
      Minimized windows stay mounted (v-show) so their content (e.g. xterm) keeps its state. -->
 <script setup lang="ts">
 import { computed, ref } from 'vue';
@@ -71,6 +72,56 @@ function onPointerUp(e: PointerEvent) {
   dragging.value = false;
   (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
 }
+
+// ---------- resize from edges/corners ----------
+type Edge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+const EDGES: Edge[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+const MIN_W = 300;
+const MIN_H = 160;
+const resizing = ref(false);
+let rs: { edge: Edge; sx: number; sy: number; x: number; y: number; w: number; h: number; pw: number; ph: number } | null = null;
+
+function onResizeDown(edge: Edge, e: PointerEvent) {
+  emit('focus');
+  if (e.button !== 0 || props.state.mode !== 'normal' || !root.value) return;
+  const parent = root.value.offsetParent as HTMLElement | null;
+  if (!parent) return;
+  const r = root.value.getBoundingClientRect();
+  const pr = parent.getBoundingClientRect();
+  rs = { edge, sx: e.clientX, sy: e.clientY, x: r.left - pr.left, y: r.top - pr.top, w: r.width, h: r.height, pw: pr.width, ph: pr.height };
+  resizing.value = true;
+  (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  e.preventDefault();
+  e.stopPropagation();
+}
+
+function onResizeMove(e: PointerEvent) {
+  if (!rs) return;
+  const dx = e.clientX - rs.sx;
+  const dy = e.clientY - rs.sy;
+  let { x, y, w, h } = rs;
+  // Each edge moves on its own; the opposite edge stays put. Stay inside the stage.
+  if (rs.edge.includes('e')) w = Math.min(Math.max(rs.w + dx, MIN_W), rs.pw - rs.x);
+  if (rs.edge.includes('s')) h = Math.min(Math.max(rs.h + dy, MIN_H), rs.ph - rs.y);
+  if (rs.edge.includes('w')) {
+    const right = rs.x + rs.w;
+    x = Math.min(Math.max(rs.x + dx, 0), right - MIN_W);
+    w = right - x;
+  }
+  if (rs.edge.includes('n')) {
+    const bottom = rs.y + rs.h;
+    y = Math.min(Math.max(rs.y + dy, 0), bottom - MIN_H);
+    h = bottom - y;
+  }
+  set({ pos: { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) } });
+}
+
+function onResizeUp(e: PointerEvent) {
+  if (!rs) return;
+  rs = null;
+  resizing.value = false;
+  (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+}
 </script>
 
 <template>
@@ -78,7 +129,7 @@ function onPointerUp(e: PointerEvent) {
     v-show="state.mode !== 'min'"
     ref="root"
     class="win"
-    :class="{ dark, max: state.mode === 'max' }"
+    :class="{ dark, max: state.mode === 'max', resizing }"
     :style="style"
     :aria-label="label"
     @pointerdown.capture="emit('focus')"
@@ -110,6 +161,19 @@ function onPointerUp(e: PointerEvent) {
       </div>
     </div>
     <div class="win-body"><slot /></div>
+    <template v-if="state.mode === 'normal'">
+      <div
+        v-for="edge in EDGES"
+        :key="edge"
+        class="rz"
+        :class="`rz-${edge}`"
+        aria-hidden="true"
+        @pointerdown="onResizeDown(edge, $event)"
+        @pointermove="onResizeMove"
+        @pointerup="onResizeUp"
+        @pointercancel="onResizeUp"
+      />
+    </template>
   </section>
 </template>
 
@@ -153,5 +217,27 @@ function onPointerUp(e: PointerEvent) {
 .icon:hover { background: rgba(0, 0, 0, 0.06); }
 .dark .icon:hover { background: rgba(255, 255, 255, 0.08); }
 .win-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* Resize handles: invisible strips on the edges, larger squares on the corners. */
+.rz { position: absolute; z-index: 5; touch-action: none; }
+.rz-n, .rz-s { left: 14px; right: 14px; height: 8px; cursor: ns-resize; }
+.rz-n { top: -2px; }
+.rz-s { bottom: -2px; }
+.rz-e, .rz-w { top: 14px; bottom: 14px; width: 8px; cursor: ew-resize; }
+.rz-e { right: -2px; }
+.rz-w { left: -2px; }
+.rz-ne, .rz-nw, .rz-se, .rz-sw { width: 16px; height: 16px; }
+.rz-ne { top: -2px; right: -2px; cursor: nesw-resize; }
+.rz-sw { bottom: -2px; left: -2px; cursor: nesw-resize; }
+.rz-nw { top: -2px; left: -2px; cursor: nwse-resize; }
+.rz-se { bottom: -2px; right: -2px; cursor: nwse-resize; }
+/* Visible grip in the bottom-right corner so people discover resizing. */
+.rz-se::after {
+  content: ''; position: absolute; right: 5px; bottom: 5px; width: 8px; height: 8px;
+  border-right: 2px solid #b5b1c0; border-bottom: 2px solid #b5b1c0; border-bottom-right-radius: 3px;
+}
+.dark .rz-se::after { border-color: #5f5b6a; }
+/* No text selection or terminal interaction while resizing. */
+.win.resizing { user-select: none; }
+.win.resizing .win-body { pointer-events: none; }
 @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
 </style>

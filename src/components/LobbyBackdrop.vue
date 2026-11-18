@@ -40,7 +40,7 @@ function mount() {
     return;
   }
   engine.setAutoRotate(true);
-  engine.setMaxFps(30); // decoration only: keep it light, the glass on top re-blurs every frame
+  engine.setMaxFps(20); // decoration only: keep it light, the glass on top re-blurs every frame
   engine.sync(lobbyState());
   const r = host.value!.getBoundingClientRect();
   engine.resize(r.width, r.height);

@@ -54,6 +54,22 @@ if (params.get('mode') === 'leak') {
     }
     w.__perfResult = { mode: 'leak', cycles, samples };
   })();
+} else if (params.get('mode') === 'visual') {
+  // Manual/visual check of walking and sitting: scripts/visual-walk.cjs drives window.__vis.
+  const e = new OfficeEngine(canvas);
+  e.resize(window.innerWidth, window.innerHeight);
+  const statuses: Record<string, AgentStatus> = {};
+  (window as unknown as { __vis: unknown }).__vis = {
+    set(list: Array<[string, AgentStatus]>) {
+      for (const [id, st] of list) statuses[id] = st;
+      const agents: Record<string, AgentState> = { lead: agent('lead', 0, 'waiting_subagents') };
+      const order = ['lead'];
+      Object.entries(statuses).forEach(([id, st], i) => { agents[id] = agent(id, i, st); order.push(id); });
+      e.sync({ sessionId: 'vis', agents, order, ended: false });
+    },
+    view(angle: number, zoomSteps: number) { e.resetView(); e.rotate(-angle / 0.006); e.zoom(zoomSteps); },
+  };
+  e.start();
 } else {
   runFrameBenchmark();
 }
