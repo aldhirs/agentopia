@@ -58,3 +58,55 @@ run('SessionManager e2e', () => {
     expect(latest!.ended).toBe(true);
   }, 180_000);
 });
+
+run('SessionManager resume e2e', () => {
+  it('resumes a finished conversation with claude --resume and keeps its memory', async () => {
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const { HistoryStore } = await import('../electron/state/history');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vo-hist-'));
+    const history = new HistoryStore(dir);
+    const hooks = new HookReceiver();
+    const sm = new SessionManager(hooks, history);
+    const stops: Array<{ session: string; text: string }> = [];
+    sm.on('hook', (r) => {
+      if (r.payload.hook_event_name === 'Stop' && !r.payload.agent_id) {
+        stops.push({ session: r.sessionId, text: String(r.payload.last_assistant_message ?? '') });
+      }
+    });
+    const waitFor = async (cond: () => boolean, ms = 120_000) => {
+      const end = Date.now() + ms;
+      while (!cond() && Date.now() < end) await new Promise((r) => setTimeout(r, 500));
+      return cond();
+    };
+
+    const first = await sm.start({
+      cwd: path.join(__dirname, '..', 'spike', 'sandbox'), model: 'sonnet', permissionMode: 'auto',
+      prompt: 'Remember the code word PELANGI for later. Reply with just: ok',
+    });
+    expect(await waitFor(() => stops.some((s) => s.session === first.id))).toBe(true);
+    await sm.stop(first.id);
+    await waitFor(() => sm.list().find((s) => s.id === first.id)?.status === 'exited', 15_000);
+
+    const entry = history.get(first.id)!;
+    expect(entry.claudeSessionId).toBeTruthy();
+    expect(entry.endedAt).toBeTruthy();
+
+    const second = await sm.resume(first.id);
+    expect(second.id).not.toBe(first.id);
+    await new Promise((r) => setTimeout(r, 6000)); // let the resumed TUI come up
+    sm.write(second.id, 'What was the code word? Reply with just the word.');
+    await new Promise((r) => setTimeout(r, 400));
+    sm.write(second.id, '\r');
+    expect(await waitFor(() => stops.some((s) => s.session === second.id))).toBe(true);
+    const answer = stops.filter((s) => s.session === second.id).map((s) => s.text).join(' ');
+    expect(answer.toUpperCase()).toContain('PELANGI');
+    expect(history.list()).toHaveLength(1); // the resume continued the same history row
+    expect(history.get(first.id)?.claudeSessionId).toBeTruthy();
+
+    await sm.stop(second.id);
+    await new Promise((r) => setTimeout(r, 1500));
+    hooks.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }, 300_000);
+});

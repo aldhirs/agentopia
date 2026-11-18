@@ -1,6 +1,6 @@
 // Renderer-side store: mirrors sessions, office state and hook history from the main process.
 import { reactive } from 'vue';
-import type { ClaudeInfo, HookRecord, OfficeEffect, OfficeState, SessionInfo } from '../../shared/types';
+import type { ClaudeInfo, HistoryEntry, HookRecord, OfficeEffect, OfficeState, SessionInfo } from '../../shared/types';
 
 const api = window.office;
 const HOOK_LIMIT = 3000;
@@ -13,6 +13,8 @@ export const office = reactive({
   states: {} as Record<string, OfficeState>,
   hooks: {} as Record<string, HookRecord[]>,
   currentId: null as string | null,
+  history: [] as HistoryEntry[],
+  recentFolders: [] as string[],
 });
 
 const effectListeners = new Set<EffectListener>();
@@ -33,9 +35,17 @@ export async function initOffice() {
     if (list.length > HOOK_LIMIT) list.splice(0, list.length - HOOK_LIMIT);
   });
   api.onEffects((id, effects) => effectListeners.forEach((cb) => cb(id, effects)));
-  const [claude, sessions] = await Promise.all([api.claudeInfo(), api.listSessions()]);
+  api.onHistory(async (list) => {
+    office.history = list;
+    office.recentFolders = await api.recentFolders();
+  });
+  const [claude, sessions, history, folders] = await Promise.all([
+    api.claudeInfo(), api.listSessions(), api.listHistory(), api.recentFolders(),
+  ]);
   office.claude = claude;
   office.sessions = sessions;
+  office.history = history;
+  office.recentFolders = folders;
 }
 
 /** Enter a session's office: load its state and hook history if we don't have them yet. */

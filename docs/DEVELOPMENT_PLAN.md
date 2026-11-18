@@ -177,9 +177,19 @@ Belum terlihat di sesi nyata: status Error (tool gagal), pindah ke pantry, kanto
 Selesai jika: menjalankan tugas nyata yang memanggil ≥2 subagent paralel menghasilkan visual yang cocok dengan terminal.
 
 ### Phase 4: Lobby · M
-- [ ] Form mulai sesi: folder (dialog native), nama, model, tugas awal, mode izin, worktree, pratinjau perintah.
-- [ ] Daftar sesi berjalan (masuk kembali) dan sesi sebelumnya (resume).
-- [ ] Deteksi tim yang tersedia per folder untuk ditampilkan di banner.
+- [x] Form mulai sesi: folder (dialog native + chip folder terakhir), nama, model, tugas awal, mode izin,
+      worktree (hanya aktif untuk folder git), pratinjau perintah yang sama persis dengan yang dijalankan (`shared/claudeArgs.ts`).
+- [x] Daftar sesi berjalan (status ringkas, avatar agent aktif, tombol Masuk).
+- [x] Riwayat sesi tersimpan permanen (`userData/sessions.json`, `electron/state/history.ts`) dengan tombol Lanjutkan
+      (`claude --resume`); melanjutkan sesi tetap memakai baris riwayat yang sama.
+- [x] Deteksi tim per folder: agent bawaan + `~/.claude/agents` + `<folder>/.claude/agents` (`electron/session/team.ts`).
+- [x] Status Claude Code di header (versi + login), dengan pesan jelas bila belum login / tidak ditemukan.
+
+**Status: selesai (18 Nov 2026).** Bukti: unit test (claudeArgs, history, team); e2e `VO_E2E=1` — sesi diberi kata
+"PELANGI", dihentikan, dilanjutkan dengan `--resume`, dan Claude menjawab "PELANGI"; smoke `SMOKE_LOBBY=1` (mulai sesi →
+lobby menampilkan sesi berjalan → hentikan → muncul di riwayat → Lanjutkan → kantor dengan percakapan lama).
+Batasan: kantor dari sesi yang dilanjutkan mulai kosong (subagent lama tidak digambar ulang); resume sesi yang memakai
+`--worktree` belum diuji.
 
 Selesai jika: alur Lobby → mulai sesi → kantor → kembali ke Lobby → masuk lagi berjalan tanpa kehilangan sesi.
 

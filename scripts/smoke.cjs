@@ -10,10 +10,13 @@ const outDir = path.resolve(process.argv[2] || 'smoke-out');
 const folder = path.resolve(process.argv[3] || path.join(__dirname, '..', 'spike', 'sandbox'));
 fs.mkdirSync(outDir, { recursive: true });
 
+// Keep smoke-test sessions out of the user's real history.
+app.setPath('userData', fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'vo-smoke-')));
 require(path.join(__dirname, '..', 'out', 'main', 'main.js'));
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const PERMISSION = process.env.SMOKE_PERMISSION === '1';
+const LOBBY = process.env.SMOKE_LOBBY === '1';
 const PROMPT = PERMISSION
   ? 'Launch ONE Explore subagent to read ./b/note.txt. After it reports, run the Bash command: touch smoke-permission.txt . Then reply: done'
   : 'In ONE message launch TWO Explore subagents in parallel: A lists the files in ./a, B reads ./b/note.txt. '
@@ -44,12 +47,39 @@ app.on('browser-window-created', (_e, win) => {
       await shot('01-lobby');
       await js(`(() => {
         const set = (sel, v) => { const el = document.querySelector(sel); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); };
-        set('#cwd', ${JSON.stringify(folder)});
-        set('#prompt', ${JSON.stringify(PROMPT)});
-        set('#mode', ${JSON.stringify(PERMISSION ? 'default' : 'auto')});
+        set('#f-dir', ${JSON.stringify(folder)});
+        set('#f-prompt', ${JSON.stringify(LOBBY ? 'Reply with just: hello from the lobby test' : PROMPT)});
+        set('#f-name', ${JSON.stringify(LOBBY ? 'uji-lobby' : '')});
       })()`);
+      await sleep(400);
+      await js(`[...document.querySelectorAll('.modes button')].find(b => b.textContent.includes(${JSON.stringify(PERMISSION ? 'Minta izin' : 'Ikut pengaturan')})).click()`);
+      await sleep(300);
+      await shot('01b-lobby-filled');
       await sleep(300);
       await js(`document.querySelector('button.primary').click()`);
+      if (LOBBY) {
+        await sleep(15000);
+        await shot('11-lobby-session');
+        await js(`document.querySelector('[aria-label="Kembali ke lobby"]').click()`);
+        await sleep(800);
+        await shot('12-lobby-running');
+        await js(`window.office.listSessions().then(l => window.office.stopSession(l[0].id))`);
+        await sleep(4000);
+        await shot('13-lobby-history');
+        await js(`[...document.querySelectorAll('.hist button')].find(b => b.textContent.includes('Lanjutkan')).click()`);
+        await sleep(8000);
+        await shot('14-resumed-office');
+        await js(`document.querySelector('[aria-label="Kembali ke lobby"]').click()`);
+        await sleep(800);
+        await shot('15-lobby-after-resume');
+        const report = await js(`(async () => ({
+          running: [...document.querySelectorAll('.run .title')].map(e => e.textContent),
+          history: [...document.querySelectorAll('.hist .title')].map(e => e.textContent),
+          sessions: await window.office.listSessions().then(l => l.map(s => [s.name, s.status, s.historyId === l[l.length - 1].historyId])),
+        }))()`);
+        console.log('report', JSON.stringify(report));
+        return;
+      }
       if (PERMISSION) {
         // Wait until some character asks for permission, capture it, then answer "1. Yes" in the terminal.
         let found = false;

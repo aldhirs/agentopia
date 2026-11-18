@@ -16,6 +16,11 @@ const api: OfficeApi = {
   getState: (id) => ipcRenderer.invoke('session:state', id),
   getHooks: (id) => ipcRenderer.invoke('session:hooks', id),
   getBuffer: (id) => ipcRenderer.invoke('pty:buffer', id),
+  listHistory: () => ipcRenderer.invoke('history:list'),
+  recentFolders: () => ipcRenderer.invoke('history:folders'),
+  resumeSession: (historyId) => ipcRenderer.invoke('session:resume', historyId),
+  removeHistory: (historyId) => ipcRenderer.invoke('history:remove', historyId),
+  folderInfo: (cwd) => ipcRenderer.invoke('folder:info', cwd),
   write: (id, data) => ipcRenderer.send('pty:write', id, data),
   resize: (id, cols, rows) => ipcRenderer.send('pty:resize', id, cols, rows),
   onPtyData: (cb) => listen('pty:data', cb),
@@ -23,6 +28,7 @@ const api: OfficeApi = {
   onEffects: (cb) => listen('office:effects', cb),
   onHook: (cb) => listen('office:hook', cb),
   onSessions: (cb) => listen('sessions:changed', cb),
+  onHistory: (cb) => listen('history:changed', cb),
 };
 
 contextBridge.exposeInMainWorld('office', api);

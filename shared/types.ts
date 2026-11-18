@@ -28,6 +28,8 @@ export interface SessionInfo {
   exitCode?: number;
   /** Claude Code's own session id, learned from the first hook event. */
   claudeSessionId?: string;
+  /** Row in the persistent history (stays the same when a conversation is resumed). */
+  historyId: string;
 }
 
 export interface ClaudeInfo {
@@ -112,6 +114,34 @@ export interface HookRecord {
   payload: HookPayload;
 }
 
+export interface HistoryEntry {
+  id: string;               // app session id
+  name: string;
+  cwd: string;
+  permissionMode: PermissionMode | 'inherit';
+  model?: string;
+  worktree?: boolean;
+  startedAt: number;
+  endedAt?: number;
+  lastActiveAt?: number;
+  claudeSessionId?: string; // needed for resume
+  subagentTypes: string[];  // types that showed up, in arrival order (with repeats)
+  lastActivity?: string;    // e.g. last lead message
+}
+
+export interface TeamMember {
+  name: string;
+  description?: string;
+  source: 'builtin' | 'user' | 'project';
+}
+
+export interface FolderInfo {
+  path: string | null;
+  exists: boolean;
+  isGit: boolean;
+  team: TeamMember[];
+}
+
 /** API exposed to the renderer by the preload script (window.office). */
 export interface OfficeApi {
   claudeInfo(): Promise<ClaudeInfo>;
@@ -122,6 +152,11 @@ export interface OfficeApi {
   getState(id: string): Promise<OfficeState | null>;
   getHooks(id: string): Promise<HookRecord[]>;
   getBuffer(id: string): Promise<string>;
+  listHistory(): Promise<HistoryEntry[]>;
+  recentFolders(): Promise<string[]>;
+  resumeSession(historyId: string): Promise<SessionInfo>;
+  removeHistory(historyId: string): Promise<void>;
+  folderInfo(cwd: string | null): Promise<FolderInfo>;
   write(id: string, data: string): void;
   resize(id: string, cols: number, rows: number): void;
   onPtyData(cb: (id: string, data: string) => void): () => void;
@@ -129,4 +164,5 @@ export interface OfficeApi {
   onEffects(cb: (sessionId: string, effects: OfficeEffect[]) => void): () => void;
   onHook(cb: (record: HookRecord) => void): () => void;
   onSessions(cb: (sessions: SessionInfo[]) => void): () => void;
+  onHistory(cb: (history: HistoryEntry[]) => void): () => void;
 }

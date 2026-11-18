@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from 'vue';
-import DevLobby from './pages/DevLobby.vue';
+import Lobby from './pages/Lobby.vue';
 import SessionView from './pages/SessionView.vue';
 import { initOffice, office } from './stores/office';
 
@@ -9,5 +9,5 @@ onMounted(() => { initOffice(); });
 
 <template>
   <SessionView v-if="office.currentId" :key="office.currentId" :session-id="office.currentId" />
-  <DevLobby v-else />
+  <Lobby v-else />
 </template>

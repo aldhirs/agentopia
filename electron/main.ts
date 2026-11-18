@@ -4,9 +4,12 @@ import type { StartSessionOptions } from '../shared/types';
 import { HookReceiver } from './hooks/hookReceiver';
 import { locateClaude } from './session/claudeLocator';
 import { SessionManager } from './session/sessionManager';
+import { folderInfo } from './session/team';
+import { HistoryStore } from './state/history';
 
 const hooks = new HookReceiver();
-const sessions = new SessionManager(hooks);
+const history = new HistoryStore(app.getPath('userData'));
+const sessions = new SessionManager(hooks, history);
 let win: BrowserWindow | null = null;
 
 function createWindow() {
@@ -45,6 +48,7 @@ sessions.on('state', (state) => send('office:state', state));
 sessions.on('effects', (id, effects) => send('office:effects', id, effects));
 sessions.on('hook', (record) => send('office:hook', record));
 sessions.on('sessions', (list) => send('sessions:changed', list));
+sessions.on('history', (list) => send('history:changed', list));
 
 ipcMain.handle('claude:info', () => locateClaude(true));
 ipcMain.handle('dialog:pick-folder', async () => {
@@ -57,6 +61,11 @@ ipcMain.handle('session:list', () => sessions.list());
 ipcMain.handle('session:state', (_e, id: string) => sessions.getState(id));
 ipcMain.handle('session:hooks', (_e, id: string) => sessions.getHooks(id));
 ipcMain.handle('pty:buffer', (_e, id: string) => sessions.getBuffer(id));
+ipcMain.handle('history:list', () => history.list());
+ipcMain.handle('history:folders', () => history.recentFolders());
+ipcMain.handle('history:remove', (_e, id: string) => { history.remove(id); send('history:changed', history.list()); });
+ipcMain.handle('session:resume', (_e, historyId: string) => sessions.resume(historyId));
+ipcMain.handle('folder:info', (_e, cwd: string | null) => folderInfo(cwd));
 ipcMain.on('pty:write', (_e, id: string, data: string) => sessions.write(id, data));
 ipcMain.on('pty:resize', (_e, id: string, cols: number, rows: number) => sessions.resize(id, cols, rows));
 
@@ -69,6 +78,7 @@ app.whenReady().then(async () => {
 app.on('before-quit', () => {
   sessions.stopAll();
   hooks.stop();
+  history.flush();
 });
 
 app.on('window-all-closed', () => {
