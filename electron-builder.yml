@@ -1,0 +1,32 @@
+appId: app.virtualoffice.desktop
+productName: Virtual Office
+copyright: Virtual Office
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**
+  - package.json
+
+# node-pty is a native module: its .node binary and spawn-helper must live outside the asar archive.
+asarUnpack:
+  - node_modules/node-pty/**
+
+npmRebuild: false
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64]
+  category: public.app-category.developer-tools
+  icon: build/icon.png
+  # No Apple Developer certificate for internal use: ad-hoc sign so Apple Silicon will run it.
+  identity: '-'
+  hardenedRuntime: false
+  gatekeeperAssess: false
+
+dmg:
+  title: Virtual Office ${version}
+  artifactName: Virtual-Office-${version}-${arch}.dmg

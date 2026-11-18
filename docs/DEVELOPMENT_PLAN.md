@@ -194,11 +194,20 @@ Batasan: kantor dari sesi yang dilanjutkan mulai kosong (subagent lama tidak dig
 Selesai jika: alur Lobby → mulai sesi → kantor → kembali ke Lobby → masuk lagi berjalan tanpa kehilangan sesi.
 
 ### Phase 5: Packaging DMG · M
-- [ ] electron-builder: `.dmg` macOS arm64 (x64 opsional), ikon app, nama "Virtual Office".
-- [ ] Rebuild node-pty untuk Electron.
-- [ ] GitHub Actions (runner macOS): build dmg saat push tag, upload sebagai artefak/Release.
-- [ ] Uji instalasi bersih di Mac lain milik anggota tim (tanpa dev tools).
-- [ ] Panduan singkat instalasi untuk tim (termasuk membuka app tanpa signing).
+- [x] electron-builder (`electron-builder.yml`): `.dmg` macOS arm64, ikon app (`build/icon.png`, dibuat oleh
+      `scripts/make-icon.cjs`), ad-hoc signing agar jalan di Apple Silicon.
+- [x] node-pty dikeluarkan dari asar (`asarUnpack`); `spawn-helper` tetap executable di app hasil build.
+- [x] Library yang di-bundle Vite dipindah ke devDependencies → paket app hanya berisi kode app + node-pty.
+- [x] GitHub Actions (`.github/workflows/release.yml`, runner macOS arm64): typecheck, test, build DMG saat push tag `v*`,
+      lampirkan ke GitHub Release. **Belum dijalankan** karena repo GitHub belum ada.
+- [x] Panduan instalasi tim (`docs/INSTALL.md`), termasuk membuka app tanpa signing Apple.
+- [ ] Uji instalasi bersih di Mac lain milik anggota tim.
+
+**Status: selesai untuk Mac ini (18 Nov 2026).** Bukti: `npm run dist` menghasilkan `release/Virtual-Office-0.1.0-arm64.dmg`
+(116 MB; isi: app + shortcut Applications); `codesign --verify` lolos; `scripts/test-packaged.mjs` membuka app hasil build
+lewat `open` (PATH minimal seperti dari Finder), menemukan `claude` + login, menjalankan sesi asli dengan subagent, dan
+menyimpan screenshot kantor. Simulasi file unduhan: Gatekeeper menolak app (sesuai dugaan, tanpa signing Apple); setelah
+`xattr -dr com.apple.quarantine` app bisa dibuka.
 
 Selesai jika: dmg hasil CI bisa dipasang dan menjalankan sesi di Mac yang tidak punya source code.
 

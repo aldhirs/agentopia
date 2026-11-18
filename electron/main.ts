@@ -7,6 +7,10 @@ import { SessionManager } from './session/sessionManager';
 import { folderInfo } from './session/team';
 import { HistoryStore } from './state/history';
 
+// `--vo-user-data=<dir>` keeps test runs of the packaged app away from the real history.
+const userDataArg = process.argv.find((a) => a.startsWith('--vo-user-data='));
+if (userDataArg) app.setPath('userData', userDataArg.slice('--vo-user-data='.length));
+
 const hooks = new HookReceiver();
 const history = new HistoryStore(app.getPath('userData'));
 const sessions = new SessionManager(hooks, history);

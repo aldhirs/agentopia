@@ -16,4 +16,14 @@ npm test           # unit test
 VO_E2E=1 npm test  # + uji end-to-end dengan sesi claude asli (memakai sedikit kuota)
 ```
 
+## Build DMG (macOS arm64)
+
+```bash
+npm run dist                          # -> release/Virtual-Office-<versi>-arm64.dmg
+node scripts/test-packaged.mjs        # uji app hasil build (dibuka via `open`, sesi claude asli)
+```
+
+Rilis otomatis: push tag `v*` ke GitHub → workflow `.github/workflows/release.yml` membangun DMG dan
+melampirkannya ke GitHub Release. Panduan pasang untuk tim: [docs/INSTALL.md](docs/INSTALL.md).
+
 Dokumen: [rencana pengembangan](docs/DEVELOPMENT_PLAN.md) · [catatan spike Phase 0](docs/spike-notes.md)
