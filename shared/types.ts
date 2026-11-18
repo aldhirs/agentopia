@@ -151,6 +151,8 @@ export interface AppSettings {
   reduceMotion: boolean;
   terminalFontSize: number;
   notifications: boolean;
+  /** Office view: 3D startup office (default) or the lighter 2D floor. */
+  officeView: '3d' | '2d';
 }
 
 /** API exposed to the renderer by the preload script (window.office). */

@@ -1,5 +1,6 @@
 // Local HTTP endpoint that receives Claude Code "http" hooks.
 // Listens on 127.0.0.1 only; each session has its own bearer token.
+import crypto from 'node:crypto';
 import http from 'node:http';
 import { EventEmitter } from 'node:events';
 import type { HookPayload } from '../../shared/types';
@@ -30,7 +31,11 @@ export class HookReceiver extends EventEmitter {
     const m = req.method === 'POST' && req.url?.match(/^\/hook\/([\w-]+)$/);
     const sessionId = m ? m[1] : undefined;
     const expected = sessionId ? this.tokens.get(sessionId) : undefined;
-    if (!sessionId || !expected || req.headers.authorization !== `Bearer ${expected}`) {
+    // Claude Code's hook client never sends Origin; browsers always do. Also pin Host to loopback
+    // (defence against DNS rebinding). The bearer token is the real gate.
+    const fromBrowser = req.headers.origin !== undefined;
+    const hostOk = req.headers.host === `127.0.0.1:${this.port}`;
+    if (!sessionId || !expected || fromBrowser || !hostOk || !tokenMatches(req.headers.authorization, expected)) {
       res.writeHead(401).end();
       req.resume();
       return;
@@ -53,6 +58,12 @@ export class HookReceiver extends EventEmitter {
       }
     });
   }
+}
+
+function tokenMatches(header: string | undefined, expected: string): boolean {
+  const a = Buffer.from(header ?? '');
+  const b = Buffer.from(`Bearer ${expected}`);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 export const HOOK_EVENTS = [

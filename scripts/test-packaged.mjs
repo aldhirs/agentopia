@@ -73,17 +73,44 @@ try {
   }
   await shot('p2-office');
   report.ok = report.claude?.found && report.claude?.loggedIn && report.labels?.length > 1;
+  // Security checks from inside the renderer (what an injected script could reach).
+  report.security = await evaluate(`(async () => {
+    const out = {};
+    out.require = typeof require; out.process = typeof process; out.module = typeof module; out.Buffer = typeof Buffer;
+    out.officeApi = Object.keys(window.office).sort().join(',');
+    const rejects = async (fn) => { try { await fn(); return false; } catch { return true; } };
+    out.rejectsRelativeCwd = await rejects(() => window.office.startSession({ cwd: 'relative/dir' }));
+    out.rejectsMissingCwd = await rejects(() => window.office.startSession({ cwd: '/definitely/not/here' }));
+    out.rejectsBlockedFlag = await rejects(() => window.office.startSession({ cwd: '/tmp', extraArgs: ['--settings', '{}'] }));
+    out.rejectsBadMode = await rejects(() => window.office.startSession({ cwd: '/tmp', permissionMode: 'bypassPermissions' }));
+    out.rejectsRelativeClaudePath = await rejects(() => window.office.setSettings({ claudePath: 'claude' }));
+    out.rejectsBadId = await rejects(() => window.office.getState('../../x'));
+    const before = location.href;
+    try { location.href = 'https://example.com/'; } catch {}
+    await new Promise((r) => setTimeout(r, 1500));
+    out.navigationBlocked = location.href === before;
+    const w = window.open('https://example.com/');
+    out.windowOpenBlocked = w === null;
+    out.csp = document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.content || null;
+    return out;
+  })()`);
   // Stop sessions from the app (as the quit dialog would), then quit and make sure nothing is left running.
   await evaluate(`window.office.listSessions().then(l => Promise.all(l.filter(s => s.status === 'running').map(s => window.office.stopSession(s.id))))`);
 } finally {
   ws.close();
   spawnSync('osascript', ['-e', 'tell application "Virtual Office" to quit']);
-  await sleep(3000);
+  const appRunning = () => spawnSync('pgrep', ['-f', `${appPath}/Contents/MacOS/Virtual Office`]).stdout.toString().trim() !== '';
+  for (let i = 0; i < 30 && appRunning(); i++) await sleep(500);
   const left = spawnSync('pgrep', ['-f', '127.0.0.1:[0-9]*/hook/']).stdout.toString().trim();
   report.orphanProcesses = left ? left.split('\n').length : 0;
-  report.appStillRunning = spawnSync('pgrep', ['-f', 'Virtual Office.app/Contents/MacOS/Virtual Office']).stdout.toString().trim() !== '';
+  report.appStillRunning = appRunning();
   fs.rmSync(userData, { recursive: true, force: true });
 }
 console.log(JSON.stringify({ ...report, claude: report.claude && { found: report.claude.found, version: report.claude.version, loggedIn: report.claude.loggedIn, path: report.claude.path } }, null, 2));
 console.log('screenshots in', outDir);
-process.exit(report.ok && report.orphanProcesses === 0 && !report.appStillRunning ? 0 : 1);
+const sec = report.security || {};
+const secOk = sec.require === 'undefined' && sec.process === 'undefined' && sec.module === 'undefined'
+  && sec.rejectsRelativeCwd && sec.rejectsMissingCwd && sec.rejectsBlockedFlag && sec.rejectsBadMode
+  && sec.rejectsRelativeClaudePath && sec.rejectsBadId && sec.navigationBlocked && sec.windowOpenBlocked;
+console.log(JSON.stringify({ security: sec }, null, 2));
+process.exit(report.ok && secOk && report.orphanProcesses === 0 && !report.appStillRunning ? 0 : 1);

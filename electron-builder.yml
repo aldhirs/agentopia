@@ -9,12 +9,24 @@ directories:
 files:
   - out/**
   - package.json
+  # The performance harness is a dev tool, not part of the app.
+  - '!out/renderer/perf.html'
+  - '!out/renderer/assets/perf-*'
 
 # node-pty is a native module: its .node binary and spawn-helper must live outside the asar archive.
 asarUnpack:
   - node_modules/node-pty/**
 
 npmRebuild: false
+
+# Electron fuses: switch off ways to turn the app binary into a generic Node/debug runtime.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  enableCookieEncryption: true
 
 mac:
   target:

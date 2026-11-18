@@ -14,6 +14,10 @@ export default defineConfig({
   renderer: {
     root: resolve(__dirname, 'src'),
     plugins: [vue()],
-    build: { rollupOptions: { input: resolve(__dirname, 'src/index.html') } },
+    build: {
+      rollupOptions: {
+        input: { index: resolve(__dirname, 'src/index.html'), perf: resolve(__dirname, 'src/perf.html') },
+      },
+    },
   },
 });

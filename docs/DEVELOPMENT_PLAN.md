@@ -227,6 +227,21 @@ palsu saat Lead menunggu subagent) dan pengaturan; smoke `SMOKE_POLISH=1` (dialo
 lanjutkan); `scripts/test-packaged.mjs` pada DMG baru: sesi asli jalan, app keluar, 0 proses `claude` tertinggal.
 Belum dilihat langsung: tampilan notifikasi macOS dan badge Dock (logikanya diuji, tampilannya bergantung izin notifikasi).
 
+### Phase 8: Kantor 3D (startup) · L
+- [x] Kantor 3D dengan three.js 0.170 (`src/office3d/`): dinding bata + neon, dua pod, Ruang Lead kaca,
+      lesehan, bean bag, billiard, coffee bar.
+- [x] Karakter manusia per peran + robot untuk agent bawaan; pose per status (mengetik, tangan di dagu,
+      angkat tangan, pegang kepala, tangan ke atas); warna layar mengikuti status.
+- [x] Hot desk 3D (`layout.ts`): pod → lesehan → bantal tambahan; agent selesai berjalan ke bean bag. Unit test.
+- [x] Animasi kirim tugas/laporan berupa bola bercahaya di lintasan melengkung.
+- [x] Klik karakter → kartu detail menempel ke karakter; daftar tim (tombol) untuk keyboard/screen reader.
+- [x] Kamera: seret untuk memutar, scroll untuk zoom, dobel-klik untuk reset.
+- [x] Pengaturan "Kantor 3D / 2D"; fallback otomatis ke 2D bila WebGL gagal; "Kurangi animasi" menghentikan render saat diam.
+- [x] Uji performa (`docs/perf-report.md`) dan keamanan (`docs/security-report.md`).
+
+**Status: selesai (18 Nov 2026).** Bukti: smoke test dev + `scripts/test-packaged.mjs` pada DMG (sesi asli,
+subagent pindah ke bean bag, cek keamanan renderer), 57 unit test.
+
 ### Phase 7: Windows `.exe` (ditunda) · M
 Dikerjakan saat ada mesin/VM Windows untuk uji.
 - [ ] Spike pty (ConPTY) + hooks di Windows.

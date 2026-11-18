@@ -5,6 +5,7 @@ import OverlayWindow, { type WinState } from '../components/OverlayWindow.vue';
 import TerminalPane from '../components/TerminalPane.vue';
 import StructuredLog from '../components/StructuredLog.vue';
 import OfficeFloor from '../components/office/OfficeFloor.vue';
+import Office3D from '../components/office/Office3D.vue';
 import AgentDetail from '../components/office/AgentDetail.vue';
 import CharacterBlob from '../components/office/CharacterBlob.vue';
 import { leaveSession, office, openSession } from '../stores/office';
@@ -33,6 +34,11 @@ const tab = ref<'term' | 'log'>('term');
 const selectedId = ref<string | null>(null);
 const anchor = ref<{ x: number; y: number; w: number; h: number } | null>(null);
 const selected = computed(() => (selectedId.value && state.value ? state.value.agents[selectedId.value] : undefined));
+const roster = computed(() => (state.value ? state.value.order.map((id) => state.value!.agents[id]) : []));
+
+// 3D office unless the user picked 2D in settings or WebGL is not available.
+const failed3d = ref('');
+const use3d = computed(() => office.settings?.officeView !== '2d' && !failed3d.value);
 
 function select(id: string) {
   selectedId.value = id;
@@ -102,8 +108,16 @@ async function stop() {
 
 <template>
   <div ref="stage" class="stage">
+    <Office3D
+      v-if="state && use3d"
+      :state="state"
+      :selected-id="detailWin.mode === 'min' ? null : selectedId"
+      @select="select"
+      @anchor="anchor = $event"
+      @failed="failed3d = $event"
+    />
     <OfficeFloor
-      v-if="state"
+      v-else-if="state"
       :state="state"
       :selected-id="detailWin.mode === 'min' ? null : selectedId"
       @select="select"
@@ -125,6 +139,18 @@ async function stop() {
           {{ stopping ? 'Menghentikan…' : 'Hentikan sesi' }}
         </button>
       </div>
+      <ul class="roster" aria-label="Tim di kantor ini">
+        <li v-for="a in roster" :key="a.id">
+          <button
+            type="button" class="desk roster-chip" :class="{ on: a.id === selectedId && detailWin.mode !== 'min' }"
+            :aria-label="`${a.label}, ${STATUS_META[a.status].label}`" @click="select(a.id)"
+          >
+            <span class="dot" :style="{ background: agentColor(a.kind === 'lead' ? 'lead' : a.type) }" />{{ a.label }}
+            <span class="chip-status" :style="{ color: STATUS_META[a.status].fg }">{{ STATUS_META[a.status].label }}</span>
+          </button>
+        </li>
+      </ul>
+      <p v-if="failed3d" class="notice">Tampilan 3D tidak tersedia ({{ failed3d }}), memakai tampilan 2D.</p>
     </div>
 
     <div v-if="exited" class="card ended" role="status">
@@ -199,6 +225,12 @@ async function stop() {
 .row { display: flex; align-items: center; gap: 10px; }
 h1 { margin: 0; font-family: var(--font-display); font-size: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: auto; }
 .path { margin: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.roster { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; max-height: 96px; overflow-y: auto; }
+.roster-chip { min-height: 32px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; border: 1px solid var(--line); background: #fff; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.roster-chip.on { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.roster-chip .dot { width: 9px; height: 9px; border-radius: 50%; }
+.chip-status { font-weight: 500; }
+.notice { margin: 4px 0 0; font-size: 12px; color: var(--st-wait-fg); }
 .meta { margin-right: auto; font-size: 13px; color: var(--ink-2); }
 .warn { color: var(--st-wait-fg); }
 .back { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--line); background: #fff; cursor: pointer; }

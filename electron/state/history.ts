@@ -71,7 +71,7 @@ export class HistoryStore {
     this.saveTimer = undefined;
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     const tmp = `${this.file}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify({ version: 1, entries: this.entries }, null, 2));
+    fs.writeFileSync(tmp, JSON.stringify({ version: 1, entries: this.entries }, null, 2), { mode: 0o600 });
     fs.renameSync(tmp, this.file);
   }
 

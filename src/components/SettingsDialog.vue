@@ -62,9 +62,13 @@ function close() {
 
       <section>
         <h3>Tampilan</h3>
+        <div class="seg" role="radiogroup" aria-label="Tampilan kantor">
+          <label class="toggle"><input type="radio" name="view" value="3d" :checked="office.settings?.officeView !== '2d'" @change="updateSettings({ officeView: '3d' })" /> Kantor 3D (startup)</label>
+          <label class="toggle"><input type="radio" name="view" value="2d" :checked="office.settings?.officeView === '2d'" @change="updateSettings({ officeView: '2d' })" /> Kantor 2D (lebih ringan)</label>
+        </div>
         <label class="toggle">
           <input type="checkbox" :checked="office.settings?.reduceMotion" @change="updateSettings({ reduceMotion: ($event.target as HTMLInputElement).checked })" />
-          Kurangi animasi karakter
+          Kurangi animasi (karakter diam, kamera tidak bergerak sendiri)
         </label>
         <label for="s-font">Ukuran font terminal: {{ office.settings?.terminalFontSize }} px</label>
         <input

@@ -1,6 +1,6 @@
-import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Notification, session, shell } from 'electron';
 import path from 'node:path';
-import type { AppSettings, OfficeState, StartSessionOptions } from '../shared/types';
+import type { OfficeState } from '../shared/types';
 import { HookReceiver } from './hooks/hookReceiver';
 import { locateClaude, setConfiguredClaudePath } from './session/claudeLocator';
 import { SessionManager } from './session/sessionManager';
@@ -8,6 +8,9 @@ import { folderInfo } from './session/team';
 import { attentionChanges, waitingCount } from './state/attention';
 import { HistoryStore } from './state/history';
 import { SettingsStore } from './state/settings';
+import {
+  validateFolderArg, validateId, validatePtyData, validateSettingsPatch, validateSize, validateStartOptions,
+} from './ipc/validate';
 
 // `--vo-user-data=<dir>` keeps test runs of the packaged app away from the real history.
 const userDataArg = process.argv.find((a) => a.startsWith('--vo-user-data='));
@@ -42,6 +45,12 @@ function createWindow() {
     if (/^https?:\/\//.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
+  // The window only ever shows the bundled app: block navigation away from it and <webview>.
+  win.webContents.on('will-navigate', (e, url) => {
+    const appUrl = process.env.ELECTRON_RENDERER_URL;
+    if (!(appUrl && url.startsWith(appUrl)) && !url.startsWith('file://')) e.preventDefault();
+  });
+  win.webContents.on('will-attach-webview', (e) => e.preventDefault());
 
   if (process.env.ELECTRON_RENDERER_URL) win.loadURL(process.env.ELECTRON_RENDERER_URL);
   else win.loadFile(path.join(__dirname, '../renderer/index.html'));
@@ -94,28 +103,38 @@ ipcMain.handle('dialog:pick-file', async () => {
   const r = await dialog.showOpenDialog(win!, { properties: ['openFile', 'showHiddenFiles'], message: 'Pilih binary claude' });
   return r.canceled ? null : r.filePaths[0] ?? null;
 });
-ipcMain.handle('session:start', (_e, opts: StartSessionOptions) => sessions.start(opts));
-ipcMain.handle('session:stop', (_e, id: string) => sessions.stop(id));
+// Every IPC input is validated here: the main process does not trust the renderer.
+ipcMain.handle('session:start', (_e, opts: unknown) => sessions.start(validateStartOptions(opts)));
+ipcMain.handle('session:stop', (_e, id: unknown) => sessions.stop(validateId(id)));
 ipcMain.handle('session:list', () => sessions.list());
-ipcMain.handle('session:state', (_e, id: string) => sessions.getState(id));
-ipcMain.handle('session:hooks', (_e, id: string) => sessions.getHooks(id));
-ipcMain.handle('pty:buffer', (_e, id: string) => sessions.getBuffer(id));
+ipcMain.handle('session:state', (_e, id: unknown) => sessions.getState(validateId(id)));
+ipcMain.handle('session:hooks', (_e, id: unknown) => sessions.getHooks(validateId(id)));
+ipcMain.handle('pty:buffer', (_e, id: unknown) => sessions.getBuffer(validateId(id)));
 ipcMain.handle('history:list', () => history.list());
 ipcMain.handle('history:folders', () => history.recentFolders());
-ipcMain.handle('history:remove', (_e, id: string) => { history.remove(id); send('history:changed', history.list()); });
-ipcMain.handle('session:resume', (_e, historyId: string) => sessions.resume(historyId));
-ipcMain.handle('folder:info', (_e, cwd: string | null) => folderInfo(cwd));
+ipcMain.handle('history:remove', (_e, id: unknown) => { history.remove(validateId(id)); send('history:changed', history.list()); });
+ipcMain.handle('session:resume', (_e, historyId: unknown) => sessions.resume(validateId(historyId)));
+ipcMain.handle('folder:info', (_e, cwd: unknown) => folderInfo(validateFolderArg(cwd)));
 ipcMain.handle('settings:get', () => settings.get());
-ipcMain.handle('settings:set', (_e, patch: Partial<AppSettings>) => {
-  const next = settings.set(patch);
+ipcMain.handle('settings:set', (_e, patch: unknown) => {
+  const next = settings.set(validateSettingsPatch(patch));
   setConfiguredClaudePath(next.claudePath);
   send('settings:changed', next);
   return next;
 });
-ipcMain.on('pty:write', (_e, id: string, data: string) => sessions.write(id, data));
-ipcMain.on('pty:resize', (_e, id: string, cols: number, rows: number) => sessions.resize(id, cols, rows));
+ipcMain.on('pty:write', (_e, id: unknown, data: unknown) => {
+  const d = validatePtyData(data);
+  if (typeof id === 'string' && d !== null) sessions.write(id, d);
+});
+ipcMain.on('pty:resize', (_e, id: unknown, cols: unknown, rows: unknown) => {
+  const size = validateSize(cols, rows);
+  if (typeof id === 'string' && size) sessions.resize(id, size[0], size[1]);
+});
 
 app.whenReady().then(async () => {
+  // The app needs no web permissions (camera, mic, geolocation, web notifications, …).
+  session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+  session.defaultSession.setPermissionCheckHandler(() => false);
   await hooks.start();
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
