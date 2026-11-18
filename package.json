@@ -14,7 +14,8 @@
     "postinstall": "node scripts/fix-node-pty.mjs",
     "dist": "electron-vite build && electron-builder --mac dmg --arm64 --publish never",
     "icon": "electron scripts/make-icon.cjs",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "dist:win": "electron-vite build && electron-builder --win nsis --x64 --publish never"
   },
   "dependencies": {
     "node-pty": "^1.1.0"

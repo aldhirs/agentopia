@@ -242,12 +242,17 @@ Belum dilihat langsung: tampilan notifikasi macOS dan badge Dock (logikanya diuj
 **Status: selesai (18 Nov 2026).** Bukti: smoke test dev + `scripts/test-packaged.mjs` pada DMG (sesi asli,
 subagent pindah ke bean bag, cek keamanan renderer), 57 unit test.
 
-### Phase 7: Windows `.exe` (ditunda) · M
-Dikerjakan saat ada mesin/VM Windows untuk uji.
-- [ ] Spike pty (ConPTY) + hooks di Windows.
-- [ ] `ClaudeLocator` untuk lokasi Windows.
-- [ ] electron-builder NSIS `.exe`; tambah `windows-latest` ke matrix GitHub Actions.
-- [ ] Uji instalasi bersih di Windows.
+### Phase 7: Windows `.exe` · M
+- [x] electron-builder NSIS `.exe` (x64), di-build silang dari macOS: `npm run dist:win`
+      → `release/Virtual-Office-Setup-<versi>-x64.exe`. node-pty memakai prebuild Windows (ConPTY) bawaan paket.
+- [x] `.cmd` shim (Claude Code dari npm) dijalankan lewat `cmd.exe`; AppUserModelID untuk notifikasi Windows.
+- [x] Job `windows-latest` di GitHub Actions (lint, typecheck, test, build exe).
+- [x] Panduan instalasi Windows (SmartScreen) di `docs/INSTALL.md`.
+- [ ] **Uji di mesin Windows sungguhan** (pty, hooks, PATH, notifikasi, kantor 3D) — belum ada mesin Windows.
+- [ ] Code signing Windows (opsional, bila dibagikan di luar tim).
+
+**Status: build selesai, belum teruji di Windows (18 Nov 2026).** Bukti build: exe PE32+ x86-64, `pty.node`/`conpty.node`
+PE32+ x86-64, fuses sama dengan versi macOS.
 
 ## 6. Risiko & mitigasi
 

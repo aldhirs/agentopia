@@ -3,10 +3,10 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import type { FolderInfo, HistoryEntry, PermissionMode, SessionInfo } from '../../shared/types';
 import { parseExtraArgs, previewCommand, shellQuote } from '../../shared/claudeArgs';
-import CharacterBlob from '../components/office/CharacterBlob.vue';
+import LobbyBackdrop from '../components/LobbyBackdrop.vue';
 import SettingsDialog from '../components/SettingsDialog.vue';
 import { office, openSession, recheckClaude } from '../stores/office';
-import { agentColor, agentTag } from '../lib/agentColor';
+import { agentColor } from '../lib/agentColor';
 import { relativeTime, duration } from '../lib/time';
 
 const api = window.office;
@@ -106,7 +106,7 @@ const team = computed(() => {
   const members = folder.value?.team ?? [];
   return [{ name: 'lead', label: 'Lead', description: 'Sesi utama' }, ...members.map((m) => ({ name: m.name, label: m.name, description: m.description }))];
 });
-const teamShown = computed(() => team.value.slice(0, 12));
+const teamShown = computed(() => team.value.slice(0, 14));
 
 // --- running sessions ---
 const running = computed(() => office.sessions.filter((s) => s.status === 'running'));
@@ -157,7 +157,9 @@ watch(() => office.recentFolders, (f) => { if (!cwd.value && f.length) cwd.value
 
 <template>
   <div class="lobby">
-    <header class="top">
+    <LobbyBackdrop :team="folder?.team ?? []" />
+    <div class="content">
+    <header class="top glass">
       <div class="brand">
         <div class="logo" aria-hidden="true">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F3F1EC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13" /><path d="M9 21v-6h6v6" /></svg>
@@ -177,21 +179,22 @@ watch(() => office.recentFolders, (f) => { if (!cwd.value && f.length) cwd.value
       </button>
     </header>
 
-    <section class="banner" aria-labelledby="team-title">
-      <h2 id="team-title">Tim kamu sudah di lobby</h2>
-      <p>Satu sesi Claude Code jadi satu kantor. Lead adalah sesi utama; yang lain subagent yang dipanggil Lead saat dibutuhkan.
-        <template v-if="folderName"> Tim untuk <strong>{{ folderName }}</strong>:</template></p>
-      <ul class="team">
-        <li v-for="(m, i) in teamShown" :key="m.name" :title="m.description">
-          <CharacterBlob :color="agentColor(m.name)" status="idle" :tag="agentTag(m.name)" :size="48" :style="{ animationDelay: `${-i * 0.4}s` }" />
-          <span>{{ m.label }}</span>
+    <section class="banner glass" aria-labelledby="team-title">
+      <div class="banner-text">
+        <h2 id="team-title">Tim kamu sudah di lobby</h2>
+        <p>Satu sesi Claude Code jadi satu kantor. Lead adalah sesi utama; yang lain subagent yang dipanggil Lead saat dibutuhkan.
+          <template v-if="folderName"> Tim untuk <strong>{{ folderName }}</strong>:</template></p>
+      </div>
+      <ul class="team" aria-label="Anggota tim">
+        <li v-for="m in teamShown" :key="m.name" :title="m.description">
+          <span class="dot" :style="{ background: agentColor(m.name) }" />{{ m.label }}
         </li>
         <li v-if="team.length > teamShown.length" class="more">+{{ team.length - teamShown.length }}</li>
       </ul>
     </section>
 
     <main class="grid">
-      <section class="card form" aria-labelledby="new-title">
+      <section class="card form glass" aria-labelledby="new-title">
         <div>
           <h2 id="new-title">Mulai sesi baru</h2>
           <p class="sub">Menjalankan <code>claude</code> di folder pilihanmu, lalu membuka kantornya.</p>
@@ -280,7 +283,7 @@ watch(() => office.recentFolders, (f) => { if (!cwd.value && f.length) cwd.value
       </section>
 
       <div class="side">
-        <section class="card" aria-labelledby="run-title">
+        <section class="card glass" aria-labelledby="run-title">
           <div class="head"><h2 id="run-title">Sedang berjalan</h2><span class="sub">{{ running.length }} sesi</span></div>
           <p v-if="!running.length" class="sub">Belum ada sesi yang berjalan.</p>
           <div v-for="s in running" :key="s.id" class="run">
@@ -301,7 +304,7 @@ watch(() => office.recentFolders, (f) => { if (!cwd.value && f.length) cwd.value
           </div>
         </section>
 
-        <section class="card" aria-labelledby="hist-title">
+        <section class="card glass" aria-labelledby="hist-title">
           <h2 id="hist-title">Sesi sebelumnya</h2>
           <p v-if="!previous.length" class="sub">Riwayat sesi yang kamu mulai dari app ini akan muncul di sini.</p>
           <div v-for="h in previous" :key="h.id" class="hist">
@@ -320,86 +323,120 @@ watch(() => office.recentFolders, (f) => { if (!cwd.value && f.length) cwd.value
         </section>
       </div>
     </main>
+    </div>
     <SettingsDialog v-if="showSettings" @close="showSettings = false" />
   </div>
 </template>
 
 <style scoped>
-.lobby { height: 100%; overflow-y: auto; background: var(--cream); }
-.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 16px 32px; background: #fff; border-bottom: 1px solid var(--line); }
+/* Glass UI over the 3D office backdrop. Text-heavy panels use a denser glass for contrast. */
+.lobby { position: relative; height: 100%; overflow: hidden; }
+.content { position: relative; z-index: 1; height: 100%; overflow-y: auto; padding: 16px 24px 32px; display: flex; flex-direction: column; gap: 18px; }
+
+.glass {
+  position: relative;
+  background: rgba(255, 255, 255, 0.5);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: blur(18px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.25), 0 18px 44px rgba(40, 30, 20, 0.18);
+}
+.glass::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 40%);
+}
+.glass > * { position: relative; }
+
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 10px 12px 10px 14px; border-radius: 20px; }
 .brand { display: flex; align-items: center; gap: 12px; margin-right: auto; }
-.logo { width: 36px; height: 36px; border-radius: 10px; background: var(--ink); display: grid; place-items: center; }
+.logo { width: 38px; height: 38px; border-radius: 12px; background: rgba(28, 27, 34, 0.88); display: grid; place-items: center; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2); }
 h1 { margin: 0; font-family: var(--font-display); font-size: 20px; font-weight: 600; }
-.chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 500; }
-.chip.ok { background: var(--st-done-bg); color: var(--st-done-fg); }
-.chip.warn { background: var(--st-wait-bg); color: var(--st-wait-fg); }
-.chip.bad { background: var(--st-error-bg); color: var(--st-error-fg); }
-.small { min-height: 36px; padding: 0 12px; font-size: 13px; }
-.gear { width: 40px; padding: 0; }
+.chip { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 999px; font-size: 13px; font-weight: 500; border: 1px solid rgba(255, 255, 255, 0.8); }
+.chip.ok { background: rgba(215, 242, 223, 0.8); color: var(--st-done-fg); }
+.chip.warn { background: rgba(255, 225, 204, 0.85); color: var(--st-wait-fg); }
+.chip.bad { background: rgba(253, 226, 223, 0.85); color: var(--st-error-fg); }
 .pulse { width: 8px; height: 8px; border-radius: 50%; background: #15803d; animation: pulse 1.4s ease-in-out infinite; }
 
-.banner { margin: 24px 32px 0; padding: 22px 28px 0; border-radius: 20px; background-color: var(--floor); background-image: repeating-linear-gradient(90deg, rgba(120, 90, 50, 0.07) 0 2px, transparent 2px 64px); }
-.banner h2 { margin: 0; font-family: var(--font-display); font-size: 26px; font-weight: 600; letter-spacing: -0.01em; }
-.banner p { margin: 6px 0 0; max-width: 760px; font-size: 14px; line-height: 1.5; color: #4a4853; }
-.team { list-style: none; margin: 14px 0 0; padding: 0 0 14px; display: flex; gap: 18px; overflow-x: auto; }
-.team li { flex: none; width: 104px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.team li span { max-width: 100%; font-size: 12px; font-weight: 600; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.team .more { justify-content: center; font-weight: 600; color: var(--ink-2); }
+/* Hero: lighter glass so the office behind shows through. */
+.banner { margin-top: 26vh; padding: 20px 24px 18px; border-radius: 26px; background: rgba(255, 255, 255, 0.36); display: flex; flex-direction: column; gap: 14px; }
+.banner h2 { margin: 0; font-family: var(--font-display); font-size: 30px; font-weight: 600; letter-spacing: -0.01em; }
+.banner p { margin: 6px 0 0; max-width: 760px; font-size: 14px; line-height: 1.5; color: #2f2d36; }
+.team { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.team li { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; background: rgba(255, 255, 255, 0.62); border: 1px solid rgba(255, 255, 255, 0.85); box-shadow: inset 0 1px 0 #fff; }
+.team .dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+.team .more { color: var(--ink-2); }
 
-.grid { display: flex; flex-wrap: wrap; gap: 24px; padding: 24px 32px 40px; align-items: flex-start; }
-.card { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.grid { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+.card { border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; background: rgba(255, 255, 255, 0.62); }
 .card h2 { margin: 0; font-family: var(--font-display); font-size: 18px; font-weight: 600; }
-.form { flex: 3 1 560px; gap: 18px; padding: 24px; }
-.side { flex: 2 1 380px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
-.sub { margin: 0; font-size: 13px; color: var(--muted); }
+.form { flex: 3 1 560px; gap: 18px; padding: 24px; background: rgba(255, 255, 255, 0.7); }
+.side { flex: 2 1 380px; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+.sub { margin: 0; font-size: 13px; color: #4a4853; }
 .field { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; border: 0; min-width: 0; }
-.field label, .field legend { font-size: 13px; font-weight: 600; padding: 0; margin-bottom: 0; }
+.field label, .field legend { font-size: 13px; font-weight: 600; padding: 0; }
 .field legend { margin-bottom: 8px; }
-.opt { font-weight: 400; color: var(--muted); }
+.opt { font-weight: 400; color: #4a4853; }
 .inline { display: flex; gap: 8px; }
-input, select, textarea { min-height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line-2); font: inherit; font-size: 14px; color: var(--ink); background: #fff; min-width: 0; }
+
+input, select, textarea {
+  min-height: 44px; padding: 0 12px; border-radius: 12px; min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.9); background: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 1px 2px rgba(28, 27, 34, 0.06); font: inherit; font-size: 14px; color: var(--ink);
+}
+input:focus, select:focus, textarea:focus { background: rgba(255, 255, 255, 0.92); }
 .inline input { flex: 1; }
 input.mono { font-family: var(--font-mono); font-size: 13px; }
 textarea { padding: 10px 12px; line-height: 1.45; resize: vertical; }
-button { min-height: 44px; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 10px; border: 1px solid var(--line-2); background: #fff; font-size: 14px; font-weight: 500; cursor: pointer; }
+
+button {
+  min-height: 44px; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.9); background: rgba(255, 255, 255, 0.66);
+  box-shadow: inset 0 1px 0 #fff, 0 2px 8px rgba(28, 27, 34, 0.06); font-size: 14px; font-weight: 500; cursor: pointer;
+}
+button:hover { background: rgba(255, 255, 255, 0.86); }
 button:disabled { opacity: 0.5; cursor: default; }
+.small { min-height: 38px; padding: 0 12px; font-size: 13px; }
+.gear { width: 40px; padding: 0; }
+
 .recent { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.recent span { font-size: 12px; color: var(--muted); }
-.recent button { min-height: 32px; padding: 0 10px; font-size: 12px; }
-.recent button.on { background: var(--accent-soft); border-color: var(--accent); }
+.recent span { font-size: 12px; color: #4a4853; }
+.recent button { min-height: 32px; padding: 0 10px; font-size: 12px; border-radius: 999px; }
+.recent button.on { background: rgba(238, 240, 255, 0.95); border-color: var(--accent); color: var(--accent-ink); }
 .two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .modes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.modes button { flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 4px; padding: 12px; text-align: left; border-width: 2px; border-color: var(--line); }
-.modes button.on { border-color: var(--accent); background: var(--accent-soft); }
+.modes button { flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 4px; padding: 12px; text-align: left; border-radius: 16px; }
+.modes button.on { background: rgba(238, 240, 255, 0.95); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent), 0 6px 18px rgba(59, 75, 216, 0.18); }
 .modes strong { font-size: 14px; }
-.modes span { font-size: 12px; line-height: 1.4; color: var(--muted); font-weight: 400; }
+.modes span { font-size: 12px; line-height: 1.4; color: #4a4853; font-weight: 400; }
 .check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; cursor: pointer; }
 .check input { width: 18px; height: 18px; min-height: 0; accent-color: var(--accent); }
-.check.disabled { color: var(--muted); cursor: default; }
-.cmd { padding: 12px 14px; border-radius: 12px; background: var(--term-bg); }
+.check.disabled { color: #5e5b66; cursor: default; }
+.cmd { padding: 12px 14px; border-radius: 16px; background: rgba(22, 21, 27, 0.82); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.12); }
 .cmd p { margin: 0 0 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--term-muted); }
 .cmd code { display: block; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; color: var(--term-fg); white-space: pre-wrap; word-break: break-all; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .actions .sub { margin-right: auto; font-size: 12px; }
-.primary { min-height: 48px; padding: 0 22px; background: var(--accent); border-color: var(--accent); color: #fff; font-size: 15px; font-weight: 600; }
+.primary { min-height: 48px; padding: 0 22px; border: 0; color: #fff; font-size: 15px; font-weight: 600; background: linear-gradient(180deg, #5363F0, #3B4BD8); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 10px 24px rgba(59, 75, 216, 0.35); }
+.primary:hover { background: linear-gradient(180deg, #5d6cf5, #3442c8); }
 .field-error { margin: 0; font-size: 13px; color: var(--st-error-fg); }
 
 .head { display: flex; align-items: baseline; justify-content: space-between; }
-.run { padding: 14px; border: 1px solid var(--line); border-radius: 14px; display: flex; flex-direction: column; gap: 10px; }
+.run { padding: 14px; border-radius: 18px; display: flex; flex-direction: column; gap: 10px; background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(255, 255, 255, 0.85); }
 .row { display: flex; align-items: center; gap: 10px; }
 .grow { flex: 1; min-width: 0; }
 .title { margin: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.meta { margin: 2px 0 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pill { flex: none; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 500; }
-.pill.idle { background: var(--st-idle-bg); color: var(--st-idle-fg); }
-.pill.tool { background: var(--st-tool-bg); color: var(--st-tool-fg); }
-.pill.wait { background: var(--st-wait-bg); color: var(--st-wait-fg); }
+.meta { margin: 2px 0 0; font-size: 12px; color: #4a4853; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pill { flex: none; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid rgba(255, 255, 255, 0.85); }
+.pill.idle { background: rgba(231, 228, 222, 0.85); color: var(--st-idle-fg); }
+.pill.tool { background: rgba(252, 233, 194, 0.9); color: var(--st-tool-fg); }
+.pill.wait { background: rgba(255, 225, 204, 0.9); color: var(--st-wait-fg); }
 .avatars { display: flex; }
-.avatar { width: 26px; height: 26px; margin-right: -6px; border-radius: 46% 46% 40% 40%; border: 2px solid #fff; }
-.dark { background: var(--ink); border-color: var(--ink); color: #fff; font-weight: 600; }
-.hist { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid #eeeae3; }
+.avatar { width: 26px; height: 26px; margin-right: -6px; border-radius: 46% 46% 40% 40%; border: 2px solid rgba(255, 255, 255, 0.95); }
+.dark { background: rgba(28, 27, 34, 0.88); border-color: rgba(28, 27, 34, 0.88); color: #fff; font-weight: 600; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2); }
+.dark:hover { background: rgba(28, 27, 34, 0.95); }
+.hist { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid rgba(255, 255, 255, 0.7); }
 .hist .title { font-size: 14px; }
 .last { margin: 4px 0 0; font-size: 12px; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
-@media (max-width: 760px) { .modes { grid-template-columns: repeat(2, minmax(0, 1fr)); } .two { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .modes { grid-template-columns: repeat(2, minmax(0, 1fr)); } .two { grid-template-columns: 1fr; } .banner { margin-top: 12vh; } }
 </style>

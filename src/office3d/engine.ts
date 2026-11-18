@@ -39,6 +39,13 @@ export class OfficeEngine {
   private angle = DEFAULT_ANGLE;
   private distance = 21.5;
   private selectedId: string | null = null;
+  private autoRotate = false;
+  /** Frame cap: the scene is calm, so 60 FPS is plenty even on 120 Hz screens (saves GPU/battery/fans). */
+  private maxFps = 60;
+  private lastRender = 0;
+  private focused = document.hasFocus();
+  private onFocus = () => { this.focused = true; this.dirty = true; };
+  private onBlur = () => { this.focused = false; };
   private dirty = true;
   private frameTimes: number[] = [];
   private lastFrame = 0;
@@ -71,6 +78,8 @@ export class OfficeEngine {
 
     this.env = buildEnvironment(this.scene);
     document.addEventListener('visibilitychange', this.onVisibility);
+    window.addEventListener('focus', this.onFocus);
+    window.addEventListener('blur', this.onBlur);
   }
 
   // ---------- state sync ----------
@@ -178,6 +187,9 @@ export class OfficeEngine {
   zoom(deltaY: number) { this.distance = Math.min(30, Math.max(11, this.distance * (1 + deltaY * 0.001))); this.dirty = true; }
   resetView() { this.angle = DEFAULT_ANGLE; this.distance = 21.5; this.dirty = true; }
   setReducedMotion(on: boolean) { this.reduceMotion = on; this.dirty = true; }
+  /** Slow camera orbit (used as the lobby backdrop). */
+  setAutoRotate(on: boolean) { this.autoRotate = on; this.dirty = true; }
+  setMaxFps(fps: number) { this.maxFps = Math.max(5, Math.min(120, fps)); }
 
   resize(w: number, h: number) {
     if (w < 2 || h < 2) return;
@@ -207,6 +219,12 @@ export class OfficeEngine {
   private frame(now: number) {
     const animating = !this.reduceMotion || this.flights.length > 0 || [...this.chars.values()].some((c) => c.isMoving);
     if (!animating && !this.dirty) { this.lastFrame = now; return; }
+    // Cap the frame rate; when the app window is in the background, 15 FPS is enough.
+    const cap = this.focused ? this.maxFps : Math.min(this.maxFps, 15);
+    if (now - this.lastRender < 1000 / cap - 2) return;
+    const dtSec = this.lastRender ? Math.min(0.1, (now - this.lastRender) / 1000) : 0;
+    this.lastRender = now;
+    if (this.autoRotate && !this.reduceMotion) this.angle += dtSec * 0.14;
     const el = 0.8;
     this.camera.position.set(Math.sin(this.angle) * this.distance * Math.cos(el), this.distance * Math.sin(el), Math.cos(this.angle) * this.distance * Math.cos(el));
     this.camera.lookAt(0.3, 0.2, -1.1);
@@ -223,14 +241,15 @@ export class OfficeEngine {
       const dt = now - this.lastFrame;
       this.frameTimes.push(dt);
       if (this.frameTimes.length > 240) this.frameTimes.shift();
-      this.adaptResolution(dt);
+      this.adaptResolution(dt, cap);
     }
     this.lastFrame = now;
   }
 
   /** Dynamic resolution: drop the render scale while frames are slow (>22 ms for ~1 s). */
-  private adaptResolution(dt: number) {
-    this.slowFrames = dt > 22 ? this.slowFrames + 1 : Math.max(0, this.slowFrames - 1);
+  private adaptResolution(dt: number, cap: number) {
+    const budget = 1000 / cap + 6;
+    this.slowFrames = dt > budget ? this.slowFrames + 1 : Math.max(0, this.slowFrames - 1);
     if (this.slowFrames > 45 && this.pixelRatio > 1) {
       this.pixelRatio = Math.max(1, this.pixelRatio - 0.25);
       this.renderer.setPixelRatio(this.pixelRatio);
@@ -252,6 +271,8 @@ export class OfficeEngine {
   dispose() {
     this.stop();
     document.removeEventListener('visibilitychange', this.onVisibility);
+    window.removeEventListener('focus', this.onFocus);
+    window.removeEventListener('blur', this.onBlur);
     disposeTree(this.scene);
     disposeShared();
     this.renderer.dispose();

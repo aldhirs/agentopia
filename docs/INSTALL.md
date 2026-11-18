@@ -1,4 +1,4 @@
-# Memasang Virtual Office (macOS)
+# Memasang Virtual Office
 
 Untuk Mac dengan chip Apple (M1/M2/M3/M4). App ini dipakai internal, jadi **tidak ditandatangani Apple**;
 macOS akan menahannya saat pertama dibuka. Ikuti langkah di bawah sekali saja.
@@ -24,6 +24,17 @@ macOS akan menahannya saat pertama dibuka. Ikuti langkah di bawah sekali saja.
 
 Alternatif tanpa Terminal: buka app sekali (akan ditolak), lalu buka **System Settings → Privacy & Security**,
 gulir ke bawah, klik **Open Anyway** untuk Virtual Office, dan konfirmasi.
+
+## Windows (x64) — eksperimental
+
+> Installer Windows dibuat dari Mac dan **belum pernah diuji di mesin Windows**. Laporkan bila ada masalah.
+
+1. Pasang Claude Code versi Windows (native) dan login: jalankan `claude` di PowerShell lalu `/login`.
+   Cek dengan `claude auth status`.
+2. Jalankan `Virtual-Office-Setup-<versi>-x64.exe`. Karena installer tidak ditandatangani, Windows SmartScreen
+   akan menampilkan peringatan: klik **More info → Run anyway**.
+3. Pilih folder instalasi (default: per pengguna), selesai. Shortcut **Virtual Office** dibuat di desktop dan Start menu.
+4. Butuh Windows 10 versi 1809 atau lebih baru (untuk ConPTY).
 
 ## Pemakaian singkat
 

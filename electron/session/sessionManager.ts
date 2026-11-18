@@ -120,7 +120,11 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     }
     this.emitHistory();
 
-    const proc = pty.spawn(claude.path, args, {
+    // On Windows an npm-installed Claude Code is a .cmd shim, which ConPTY can only start through cmd.exe.
+    const viaCmd = process.platform === 'win32' && /\.(cmd|bat)$/i.test(claude.path);
+    const file = viaCmd ? (process.env.ComSpec || 'cmd.exe') : claude.path;
+    const argv = viaCmd ? ['/d', '/s', '/c', claude.path, ...args] : args;
+    const proc = pty.spawn(file, argv, {
       name: 'xterm-256color',
       cols: opts.cols ?? 120,
       rows: opts.rows ?? 32,

@@ -39,6 +39,21 @@ mac:
   hardenedRuntime: false
   gatekeeperAssess: false
 
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.png
+  # No Windows code-signing certificate: SmartScreen will warn on first run (see docs/INSTALL.md).
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: Virtual Office
+  artifactName: Virtual-Office-Setup-${version}-${arch}.${ext}
+
 dmg:
   title: Virtual Office ${version}
   artifactName: Virtual-Office-${version}-${arch}.dmg
