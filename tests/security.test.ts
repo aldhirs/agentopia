@@ -117,7 +117,9 @@ describe('IPC validation', () => {
 });
 
 describe('files at rest', () => {
-  it('history and settings are readable by the owner only (0600)', () => {
+  // POSIX permission bits; Windows has no such mode (always reports 0666) and protects the
+  // per-user %APPDATA% folder with ACLs instead.
+  it.skipIf(process.platform === 'win32')('history and settings are readable by the owner only (0600)', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vo-perm-'));
     const h = new HistoryStore(dir);
     h.upsert({ id: 'a', name: 'a', cwd: '/p', permissionMode: 'inherit', startedAt: 1, subagentTypes: [] });
