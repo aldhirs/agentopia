@@ -1,0 +1,208 @@
+# Virtual Office — Development Plan
+
+Status: draft v2 · 18 Nov 2026
+Desain acuan: canvas "Virtual Office Agents" (Lobby, Sesi, Status karakter)
+
+Keputusan:
+- **v1 fokus macOS (`.dmg`).** Windows (`.exe`) ditunda ke Phase 7 karena belum ada mesin Windows untuk uji.
+  Arsitektur tetap dijaga agar bisa di-port (lihat §3).
+- **Pemakaian: pribadi + tim internal.** Tidak perlu Apple Developer Program untuk v1; DMG tanpa signing.
+- **Repo: GitHub pribadi.** CI pakai GitHub Actions (runner macOS).
+
+## 1. Tujuan
+
+Aplikasi desktop (v1: macOS `.dmg`; nanti Windows `.exe`) yang menjalankan sesi Claude Code
+dan memvisualisasikannya sebagai kantor virtual:
+
+- **1 sesi Claude Code = 1 kantor.** Lead = sesi utama, subagent = karakter yang dipanggil Lead.
+- Karakter bergerak sesuai aktivitas nyata (berpikir, memakai tool, minta izin, error, selesai).
+- Terminal Claude Code asli tampil sebagai jendela overlay (bisa minimize, maximize, drag).
+- Memakai login Claude Code yang sudah ada di komputer pemakai, **tanpa API key** dan tanpa langganan tambahan.
+
+### Di luar lingkup v1
+- Menempel ke sesi `claude` yang dibuka dari terminal lain (hanya sesi yang dijalankan dari app).
+- Multi-user / akses jaringan. App hanya listen di `127.0.0.1`.
+- Windows build (Phase 7) dan Linux build (bisa ditambahkan nanti, stack-nya sama).
+- Code signing / notarization (hanya dibutuhkan jika app dibagikan di luar tim).
+
+## 2. Keputusan arsitektur
+
+| Area | Pilihan | Alasan |
+|---|---|---|
+| Shell aplikasi | **Electron** + electron-builder | Satu codebase untuk `.dmg` dan `.exe`; backend Node berjalan di main process |
+| UI | **Vue 3 + Vite + TypeScript** | Sesuai stack tim; animasi pakai CSS (sudah terbukti di desain) |
+| Terminal | **node-pty** (macOS: pty, Windows: ConPTY) + **xterm.js** | Menampilkan TUI Claude Code asli dan bisa diketik |
+| Sumber status karakter | **Hooks Claude Code**, disuntikkan per sesi lewat `claude --settings <json>` | Tidak mengubah `~/.claude/settings.json` pemakai |
+| Cadangan sumber status | Membaca transcript JSONL sesi di folder `~/.claude/projects/` | Dipakai jika data hooks tidak cukup (mis. tidak bisa membedakan subagent) |
+| Main ↔ UI | Electron IPC (contextBridge, `contextIsolation: true`) | Renderer tidak punya akses Node langsung |
+| Penerima hooks | HTTP server di `127.0.0.1`, port acak, token per sesi | Aman; hanya proses lokal dengan token yang bisa mengirim event |
+| Penyimpanan app | JSON di folder data app (`app.getPath('userData')`) | Daftar sesi, preferensi; tanpa database |
+
+```
+┌──────────────── Electron app ────────────────┐
+│ Renderer (Vue)                                │
+│  Lobby · Office · Terminal (xterm) · Detail   │
+│            ▲ IPC (event, output pty)          │
+│ Main process (Node)                           │
+│  SessionManager ── node-pty ──▶ claude (TUI)  │
+│  HookReceiver (127.0.0.1:port, token) ◀─ hooks│
+│  TranscriptWatcher (cadangan)                 │
+│  StateStore: sesi → agent → status            │
+└───────────────────────────────────────────────┘
+```
+
+### Model data inti
+- **Session**: id, nama, folder, mode izin, model, worktree, `claude` session id, status proses.
+- **Agent**: id (Lead atau instance subagent), tipe (`backend-engineer`, `Explore`, …), nama tampilan,
+  warna, status (`idle | thinking | tool_use | waiting | error | done`), aktivitas terakhir, log.
+- **Event**: `{ sessionId, agentId, kind, tool?, input?, result?, ts }` hasil normalisasi dari hooks/transcript.
+
+### Tim dinamis (hot desk)
+- Tipe agent yang tersedia dibaca dari `~/.claude/agents/`, `<project>/.claude/agents/`, plus agent bawaan.
+- Meja di kantor dibuat saat subagent dipanggil; dua instance tipe yang sama = dua karakter.
+- Tipe yang tidak dikenal tetap tampil: warna dan label dibuat otomatis dari namanya.
+
+## 3. Target platform
+
+| | macOS (v1) | Windows (Phase 7) |
+|---|---|---|
+| Output | `.dmg` (arm64; x64 opsional) | `.exe` installer NSIS (x64) |
+| Lokasi `claude` | `~/.local/bin/claude`, Homebrew, npm global | `%USERPROFILE%\.local\bin\claude.exe`, npm global (`claude.cmd`) |
+| PTY | pty bawaan | ConPTY (Windows 10 1809+) |
+| Build | GitHub Actions runner macOS (atau lokal) | runner Windows (node-pty native, tidak di-cross-compile) |
+| Tanpa signing | Gatekeeper: klik kanan → Open | SmartScreen: "More info → Run anyway" |
+| Signing (opsional) | Apple Developer Program + notarization | Sertifikat code signing (OV/EV) |
+
+Prasyarat di komputer pemakai: Claude Code terpasang dan sudah login.
+
+Distribusi ke tim internal (DMG tanpa signing): setelah drag ke Applications, buka pertama kali
+dengan klik kanan → Open, atau jalankan `xattr -dr com.apple.quarantine "/Applications/Virtual Office.app"`.
+
+Aturan agar port ke Windows nanti murah:
+- Semua path lewat `path`/`os.homedir()`, tidak ada path Unix yang di-hardcode.
+- Perintah hook tidak bergantung pada shell/utilitas Unix (`curl`, `bash`); pakai helper Node yang dibawa app.
+- Logika khusus OS dikumpulkan di satu modul (`ClaudeLocator`, packaging).
+
+## 4. Struktur folder (rencana)
+
+```
+simple-virtual-office/
+├─ docs/                     # plan, catatan spike, keputusan teknis
+├─ electron/
+│  ├─ main.ts                # window, IPC, lifecycle
+│  ├─ preload.ts             # API aman untuk renderer
+│  ├─ session/               # SessionManager, ClaudeLocator, pty
+│  ├─ hooks/                 # HookReceiver, settings injector, helper hook
+│  ├─ transcript/            # TranscriptWatcher (cadangan)
+│  └─ state/                 # StateStore, normalisasi event
+├─ src/                      # renderer Vue
+│  ├─ pages/                 # Lobby, Office
+│  ├─ components/            # Character, Desk, Window, Terminal, DetailCard
+│  └─ stores/                # state UI (Pinia)
+├─ build/                    # ikon, konfigurasi electron-builder
+└─ .github/workflows/        # build dmg + exe
+```
+
+## 5. Phase
+
+Ukuran: S = kecil, M = sedang, L = besar (relatif, bukan estimasi hari).
+
+### Phase 0: Spike validasi · M
+Tujuan: membuktikan bagian paling berisiko sebelum membangun app.
+
+- [x] Spawn `claude` interaktif di node-pty (macOS). Tampilan di xterm.js dipindah ke Phase 2.
+- [x] Pastikan login langganan terpakai: env `ANTHROPIC_API_KEY` dihapus saat spawn.
+- [x] Suntikkan hooks lewat `--settings` dan rekam semua payload ke file:
+      `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Notification`, `SubagentStop`, `Stop`
+      (plus hook terkait subagent/izin lain yang tersedia di versi terpasang).
+- [x] **Pertanyaan kunci:** apakah event dari subagent bisa dibedakan per instance saat beberapa jalan paralel?
+- [ ] Bandingkan isi transcript JSONL secara rinci → cukup diketahui lokasinya (`agent_transcript_path`); detail dikerjakan saat Phase 3 butuh teks laporan.
+- [x] Tentukan cara hook mengirim event tanpa bergantung pada utilitas Unix
+      (opsi: hook tipe HTTP jika didukung · helper Node yang dibawa app · tail transcript).
+
+**Status: selesai (18 Nov 2026)** — hasil di `docs/spike-notes.md`. Sumber event: HTTP hooks via `--settings`.
+
+Selesai jika: ada `docs/spike-notes.md` berisi contoh payload asli, jawaban pertanyaan kunci, dan
+keputusan final sumber event.
+
+### Phase 1: Fondasi app · M
+- [x] Scaffold Electron 45 + electron-vite + Vue 3 + TS (typecheck `npm run typecheck`, test `npm test`).
+- [ ] Lint + format (ESLint/Prettier) — belum dipasang.
+- [x] `ClaudeLocator`: cari binary `claude` (macOS; jalur Windows sudah disiapkan, belum diuji) + cek login via `claude auth status`.
+- [x] PATH login shell untuk app yang dibuka dari Finder (`shellEnv.ts`).
+- [x] `SessionManager`: start, stop, satu proses pty per sesi. Resume (`--resume`) sudah ada di kode, **belum diuji**.
+- [x] `HookReceiver` di `127.0.0.1` (port acak, token per sesi, HTTP hooks via `--settings`).
+- [x] Reducer event → state kantor (`electron/state/reducer.ts`), diuji dengan rekaman spike.
+- [x] Pengiriman state, efek, hook mentah, dan output pty ke renderer lewat IPC.
+- [x] UI debug sementara (`src/App.vue`).
+
+**Status: selesai (18 Nov 2026)** kecuali lint/format.
+Bukti: `npm test` (15 unit test) dan `VO_E2E=1 npm test` (sesi `claude` asli + 1 subagent) lolos; app terbuka tanpa error.
+Catatan: folder yang belum dipercaya memunculkan layar *workspace trust* di terminal; sesi baru jalan setelah dijawab.
+
+Selesai jika: dari UI sederhana bisa start sesi, melihat event mentah mengalir, dan stop sesi.
+
+### Phase 2: Terminal · M
+- [ ] Komponen `Terminal` (xterm.js): output, input keyboard, resize, copy/paste, warna.
+- [ ] Komponen `Window` overlay: minimize ke dock, maximize/restore, drag, urutan tumpukan.
+- [ ] Tab "Log terstruktur" dengan filter per agent.
+
+Selesai jika: sesi Claude Code bisa dipakai penuh dari dalam app (prompt, izin, slash command) seperti di terminal biasa.
+
+### Phase 3: Virtual office · L
+- [ ] Lantai kantor yang menyesuaikan ukuran layar; Ruang Lead, area kerja, pantry.
+- [ ] Karakter + 6 status animasi (port dari desain), hormati `prefers-reduced-motion`.
+- [ ] Hot desk dinamis: meja muncul saat subagent dipanggil; instance ganda; warna otomatis untuk tipe baru.
+- [ ] Garis tugas (Lead → subagent) dan laporan balik (subagent → Lead).
+- [ ] Kartu detail per karakter (overlay, menempel ke karakter, bisa drag/minimize/maximize).
+
+Selesai jika: menjalankan tugas nyata yang memanggil ≥2 subagent paralel menghasilkan visual yang cocok dengan terminal.
+
+### Phase 4: Lobby · M
+- [ ] Form mulai sesi: folder (dialog native), nama, model, tugas awal, mode izin, worktree, pratinjau perintah.
+- [ ] Daftar sesi berjalan (masuk kembali) dan sesi sebelumnya (resume).
+- [ ] Deteksi tim yang tersedia per folder untuk ditampilkan di banner.
+
+Selesai jika: alur Lobby → mulai sesi → kantor → kembali ke Lobby → masuk lagi berjalan tanpa kehilangan sesi.
+
+### Phase 5: Packaging DMG · M
+- [ ] electron-builder: `.dmg` macOS arm64 (x64 opsional), ikon app, nama "Virtual Office".
+- [ ] Rebuild node-pty untuk Electron.
+- [ ] GitHub Actions (runner macOS): build dmg saat push tag, upload sebagai artefak/Release.
+- [ ] Uji instalasi bersih di Mac lain milik anggota tim (tanpa dev tools).
+- [ ] Panduan singkat instalasi untuk tim (termasuk membuka app tanpa signing).
+
+Selesai jika: dmg hasil CI bisa dipasang dan menjalankan sesi di Mac yang tidak punya source code.
+
+### Phase 6: Polish · M
+- [ ] Penanganan error: `claude` tidak ditemukan, login kedaluwarsa, proses crash, port bentrok.
+- [ ] Banyak sesi sekaligus; berhenti bersih saat app ditutup (tidak meninggalkan proses yatim).
+- [ ] Pengaturan: lokasi `claude`, tema, kecepatan animasi.
+- [ ] Peringatan pemakaian kuota bila datanya tersedia.
+
+### Phase 7: Windows `.exe` (ditunda) · M
+Dikerjakan saat ada mesin/VM Windows untuk uji.
+- [ ] Spike pty (ConPTY) + hooks di Windows.
+- [ ] `ClaudeLocator` untuk lokasi Windows.
+- [ ] electron-builder NSIS `.exe`; tambah `windows-latest` ke matrix GitHub Actions.
+- [ ] Uji instalasi bersih di Windows.
+
+## 6. Risiko & mitigasi
+
+| Risiko | Mitigasi |
+|---|---|
+| Hooks tidak membedakan instance subagent paralel | Phase 0 menjawab ini; cadangan: transcript JSONL |
+| Payload/nama hook berubah antar versi Claude Code | Normalisasi di satu modul; catat versi `claude` yang diuji; tampilkan peringatan versi |
+| Perbedaan Windows (path, shell untuk hook command, ConPTY) | Aturan portabilitas di §3 sejak awal; spike Windows di Phase 7 |
+| node-pty gagal build/terpasang | Prebuilt + rebuild di CI per OS; pin versi Electron dan node-pty |
+| App GUI tidak mewarisi PATH shell | `ClaudeLocator` mencari lokasi umum + pengaturan path manual |
+| Tanpa signing → peringatan Gatekeeper | Panduan instalasi untuk tim; signing hanya jika app dibagikan di luar tim |
+| Kuota langganan cepat habis karena banyak sesi/subagent | Tampilkan jumlah sesi aktif; peringatan di Lobby |
+
+## 7. Keputusan yang sudah diambil
+
+| Pertanyaan | Jawaban |
+|---|---|
+| Ada mesin Windows untuk uji? | Belum → v1 fokus `.dmg`, Windows di Phase 7 |
+| Siapa pemakainya? | Pribadi + tim internal → tanpa signing untuk v1 |
+| Repo di mana? | GitHub pribadi → GitHub Actions |
