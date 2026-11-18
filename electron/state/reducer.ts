@@ -68,9 +68,13 @@ export function reduce(prev: OfficeState, memo: ReducerMemo, p: HookPayload, now
           { kind: 'tool', tool: 'Agent', text: `${subagentType} · ${input.description ?? ''}`.trim() });
         break;
       }
+      if (tool === 'SubagentHandback') {
+        touch(actorId, { status: 'tool_use', activity: 'Melapor ke Lead' });
+        break;
+      }
       const summary = summarizeTool(tool, p.tool_input);
-      touch(actorId, { status: 'tool_use', activity: summary },
-        { kind: 'tool', tool, text: summary.replace(`${tool} · `, '') });
+      const detail = summary === tool ? '' : summary.slice(tool.length + 3);
+      touch(actorId, { status: 'tool_use', activity: summary }, { kind: 'tool', tool, text: detail });
       break;
     }
     case 'SubagentStart': {
@@ -83,7 +87,7 @@ export function reduce(prev: OfficeState, memo: ReducerMemo, p: HookPayload, now
         status: 'thinking', activity: 'Berpikir…',
         description: spawn?.description ?? state.agents[id].description,
         spawnToolUseId: spawn?.toolUseId,
-      }, spawn?.description ? { kind: 'status', text: `Tugas: ${spawn.description}` } : undefined);
+      });
       effects.push({ type: 'dispatch', from: LEAD, to: id, at: now });
       break;
     }

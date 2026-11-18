@@ -158,11 +158,21 @@ Belum diuji manual oleh user: copy/paste, slash command, menjawab izin di termin
 Selesai jika: sesi Claude Code bisa dipakai penuh dari dalam app (prompt, izin, slash command) seperti di terminal biasa.
 
 ### Phase 3: Virtual office · L
-- [ ] Lantai kantor yang menyesuaikan ukuran layar; Ruang Lead, area kerja, pantry.
-- [ ] Karakter + 6 status animasi (port dari desain), hormati `prefers-reduced-motion`.
-- [ ] Hot desk dinamis: meja muncul saat subagent dipanggil; instance ganda; warna otomatis untuk tipe baru.
-- [ ] Garis tugas (Lead → subagent) dan laporan balik (subagent → Lead).
-- [ ] Kartu detail per karakter (overlay, menempel ke karakter, bisa drag/minimize/maximize).
+- [x] Lantai kantor (Ruang lead, area kerja, pantry, papan tugas) yang menyesuaikan ukuran layar (`OfficeFloor.vue`).
+- [x] Karakter + status animasi dari desain (`CharacterBlob.vue`), plus status Lead "Menunggu subagent" dan "Menunggu kamu";
+      semua animasi berhenti bila sistem disetel *reduce motion*.
+- [x] Hot desk dinamis (`src/lib/seats.ts`): meja muncul saat subagent dipanggil, posisi stabil, instance ganda
+      (`Explore`, `Explore #2`), warna & badge otomatis untuk tipe baru. Jika meja penuh, subagent yang sudah selesai
+      pindah ke pantry; jika tetap kurang, kantor bertambah baris.
+- [x] Garis tugas (biru, Lead → subagent) dan laporan balik (hijau, subagent → Lead) dari efek reducer.
+- [x] Papan tugas berisi deskripsi tugas subagent; tercoret saat selesai.
+- [x] Kartu detail per karakter: menempel ke karakter, bisa drag/minimize/maximize, berisi tugas dari Lead,
+      log aktivitas, dan peringatan izin.
+
+**Status: selesai (18 Nov 2026).** Bukti (`scripts/smoke.cjs`, screenshot):
+2 subagent Explore paralel → 2 meja + garis tugas + Lead "Menunggu subagent" + centang saat selesai;
+`SMOKE_PERMISSION=1` → Lead "Minta izin" dengan tanda "!", dijawab lewat terminal, perintah berjalan, Lead "Selesai".
+Belum terlihat di sesi nyata: status Error (tool gagal), pindah ke pantry, kantor bertambah baris (keduanya diuji di unit test).
 
 Selesai jika: menjalankan tugas nyata yang memanggil ≥2 subagent paralel menghasilkan visual yang cocok dengan terminal.
 

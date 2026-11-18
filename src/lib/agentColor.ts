@@ -27,3 +27,17 @@ function hash(s: string): number {
 export function agentColor(type: string, _instanceId?: string): string {
   return KNOWN[type] ?? PALETTE[hash(type) % PALETTE.length];
 }
+
+const TAGS: Record<string, string> = {
+  lead: 'LEAD', pm: 'PM', 'solution-architect': 'ARC', 'backend-engineer': 'BE', 'frontend-engineer': 'FE',
+  'product-designer': 'UX', 'qa-engineer': 'QA', 'security-engineer': 'SEC', sre: 'SRE',
+  Explore: 'EXP', Plan: 'PLAN', 'general-purpose': 'GP',
+};
+
+/** Short badge text shown on a character's body. */
+export function agentTag(type: string): string {
+  if (TAGS[type]) return TAGS[type];
+  const words = type.split(/[-_\s]+/).filter(Boolean);
+  const tag = words.length > 1 ? words.map((w) => w[0]).join('') : type.slice(0, 3);
+  return tag.slice(0, 4).toUpperCase();
+}

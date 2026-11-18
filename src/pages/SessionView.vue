@@ -1,12 +1,14 @@
-<!-- One session = one office. Phase 2: office placeholder + Terminal window (Terminal / Log tabs).
-     The office floor and character detail window arrive in Phase 3. -->
+<!-- One session = one office: full-screen floor with floating windows (Terminal, character detail). -->
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
 import OverlayWindow, { type WinState } from '../components/OverlayWindow.vue';
 import TerminalPane from '../components/TerminalPane.vue';
 import StructuredLog from '../components/StructuredLog.vue';
+import OfficeFloor from '../components/office/OfficeFloor.vue';
+import AgentDetail from '../components/office/AgentDetail.vue';
+import CharacterBlob from '../components/office/CharacterBlob.vue';
 import { leaveSession, office } from '../stores/office';
-import { agentColor } from '../lib/agentColor';
+import { agentColor, agentTag } from '../lib/agentColor';
 import { STATUS_META } from '../lib/status';
 
 const props = defineProps<{ sessionId: string }>();
@@ -14,16 +16,61 @@ const api = window.office;
 
 const session = computed(() => office.sessions.find((s) => s.id === props.sessionId));
 const state = computed(() => office.states[props.sessionId]);
-const agents = computed(() => (state.value ? state.value.order.map((id) => state.value!.agents[id]) : []));
 
-const tab = ref<'term' | 'log'>('term');
+const counts = computed(() => {
+  const agents = state.value ? Object.values(state.value.agents) : [];
+  const active = agents.filter((a) => !['done', 'idle'].includes(a.status)).length;
+  const waiting = agents.filter((a) => a.status === 'waiting').length;
+  return { active, waiting, done: agents.filter((a) => a.kind === 'subagent' && a.status === 'done').length };
+});
+
+// --- windows ---
+let zTop = 12;
 const termWin = reactive<WinState>({ mode: 'normal', pos: null, z: 10 });
-let zTop = 10;
-const focusTerm = () => { termWin.z = ++zTop; };
-const setTermWin = (s: WinState) => Object.assign(termWin, s);
+const detailWin = reactive<WinState>({ mode: 'min', pos: null, z: 11 });
+const tab = ref<'term' | 'log'>('term');
 
-const dock = computed(() => (termWin.mode === 'min' ? [{ key: 'term', label: 'Terminal' }] : []));
-const restore = (key: string) => { if (key === 'term') termWin.mode = 'normal'; };
+const selectedId = ref<string | null>(null);
+const anchor = ref<{ x: number; y: number; w: number; h: number } | null>(null);
+const selected = computed(() => (selectedId.value && state.value ? state.value.agents[selectedId.value] : undefined));
+
+function select(id: string) {
+  selectedId.value = id;
+  detailWin.pos = null; // re-anchor next to the newly picked character
+  if (detailWin.mode === 'min') detailWin.mode = 'normal';
+  detailWin.z = ++zTop;
+}
+
+const stage = ref<HTMLElement | null>(null);
+const CARD_W = 360;
+const CARD_H = 440;
+const detailStyle = computed<Record<string, string>>(() => {
+  const W = stage.value?.clientWidth ?? 1440;
+  const H = stage.value?.clientHeight ?? 900;
+  const a = anchor.value;
+  let left = 16, top = 140;
+  if (a) {
+    left = a.x + a.w + 12;
+    if (left + CARD_W > W - 16) left = a.x - 12 - CARD_W;
+    left = Math.max(16, left);
+    top = Math.max(140, Math.min(a.y, H - 16 - CARD_H));
+  }
+  return { left: `${Math.round(left)}px`, top: `${Math.round(top)}px`, width: `${CARD_W}px`, maxHeight: `${CARD_H}px` };
+});
+
+const dock = computed(() => {
+  const d: Array<{ key: 'term' | 'detail'; label: string; color: string }> = [];
+  if (termWin.mode === 'min') d.push({ key: 'term', label: 'Terminal', color: '#E8A07A' });
+  if (detailWin.mode === 'min' && selected.value) {
+    d.push({ key: 'detail', label: `Detail · ${selected.value.label}`, color: agentColor(selected.value.type) });
+  }
+  return d;
+});
+function restore(key: 'term' | 'detail') {
+  const w = key === 'term' ? termWin : detailWin;
+  w.mode = 'normal';
+  w.z = ++zTop;
+}
 
 const stopping = ref(false);
 async function stop() {
@@ -33,21 +80,14 @@ async function stop() {
 </script>
 
 <template>
-  <div class="stage">
-    <div class="floor" aria-hidden="true" />
-
-    <div class="placeholder" role="region" aria-label="Kantor">
-      <p class="ph-title">Kantor</p>
-      <p class="ph-sub">Lantai kantor dan karakter dibangun di Phase 3. Sementara, status agent tampil di sini.</p>
-      <ul class="roster">
-        <li v-for="a in agents" :key="a.id">
-          <span class="blob" :style="{ background: agentColor(a.type, a.id) }" />
-          <span class="name">{{ a.label }}</span>
-          <span class="pill" :style="{ background: STATUS_META[a.status].bg, color: STATUS_META[a.status].fg }">{{ STATUS_META[a.status].label }}</span>
-          <span class="act mono">{{ a.activity }}</span>
-        </li>
-      </ul>
-    </div>
+  <div ref="stage" class="stage">
+    <OfficeFloor
+      v-if="state"
+      :state="state"
+      :selected-id="detailWin.mode === 'min' ? null : selectedId"
+      @select="select"
+      @anchor="anchor = $event"
+    />
 
     <div class="card session-card">
       <div class="row">
@@ -55,10 +95,11 @@ async function stop() {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
         </button>
         <h1>Sesi · {{ session?.name }}</h1>
+        <span class="pill" :class="session?.status === 'running' ? 'run' : 'off'">{{ session?.status === 'running' ? 'Berjalan' : 'Selesai' }}</span>
       </div>
       <p class="mono path">{{ session?.cwd }}</p>
       <div class="row">
-        <span class="pill" :class="session?.status === 'running' ? 'run' : 'off'">{{ session?.status === 'running' ? 'Berjalan' : 'Selesai' }}</span>
+        <span class="meta">{{ counts.active }} aktif · {{ counts.done }} subagent selesai<template v-if="counts.waiting"> · <strong class="warn">{{ counts.waiting }} minta izin</strong></template></span>
         <button v-if="session?.status === 'running'" type="button" class="stop" :disabled="stopping" @click="stop">
           {{ stopping ? 'Menghentikan…' : 'Hentikan sesi' }}
         </button>
@@ -67,7 +108,7 @@ async function stop() {
 
     <div v-if="dock.length" class="card dock">
       <button v-for="d in dock" :key="d.key" type="button" @click="restore(d.key)">
-        <span class="dock-dot" />{{ d.label }}
+        <span class="dock-dot" :style="{ background: d.color }" />{{ d.label }}
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8" /></svg>
       </button>
     </div>
@@ -76,10 +117,10 @@ async function stop() {
       :state="termWin"
       label="Terminal"
       dark
-      :default-style="{ left: '16px', right: '16px', bottom: '16px', height: '42%' }"
+      :default-style="{ left: '16px', right: '16px', bottom: '16px', height: '26%' }"
       :max-inset="{ top: 16, right: 16, bottom: 16, left: 16 }"
-      @update:state="setTermWin"
-      @focus="focusTerm"
+      @update:state="Object.assign(termWin, $event)"
+      @focus="termWin.z = ++zTop"
     >
       <template #header>
         <div class="tabs" role="tablist" aria-label="Tampilan log">
@@ -94,40 +135,51 @@ async function stop() {
       <TerminalPane v-show="tab === 'term'" :session-id="sessionId" :visible="tab === 'term' && termWin.mode !== 'min'" />
       <StructuredLog v-if="tab === 'log'" :session-id="sessionId" />
     </OverlayWindow>
+
+    <OverlayWindow
+      v-if="selected"
+      :state="detailWin"
+      :label="`Detail ${selected.label}`"
+      :default-style="detailStyle"
+      :max-inset="{ top: 16, right: 16, bottom: 16, left: 16 }"
+      class="detail-win"
+      :style="{ borderTop: `4px solid ${agentColor(selected.type)}` }"
+      @update:state="Object.assign(detailWin, $event)"
+      @focus="detailWin.z = ++zTop"
+    >
+      <template #header>
+        <CharacterBlob :color="agentColor(selected.type)" :status="'idle'" :tag="agentTag(selected.type)" :size="30" class="mini" />
+        <div class="dh">
+          <h2>{{ selected.label }}</h2>
+          <code>{{ selected.kind === 'lead' ? 'sesi utama' : selected.type }}</code>
+        </div>
+        <span class="pill" :style="{ background: STATUS_META[selected.status].bg, color: STATUS_META[selected.status].fg }">{{ STATUS_META[selected.status].label }}</span>
+      </template>
+      <AgentDetail :agent="selected" />
+    </OverlayWindow>
   </div>
 </template>
 
 <style scoped>
 .stage { position: relative; height: 100%; overflow: hidden; background: var(--night); }
-.floor {
-  position: absolute; inset: 0;
-  background-color: var(--floor);
-  background-image: repeating-linear-gradient(90deg, rgba(120, 90, 50, 0.07) 0 2px, transparent 2px 72px);
-}
-.placeholder { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); width: min(640px, calc(100% - 64px)); text-align: center; }
-.ph-title { margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 600; color: #6b5d45; }
-.ph-sub { margin: 6px 0 16px; font-size: 13px; color: #6b5d45; }
-.roster { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; text-align: left; }
-.roster li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.7); }
-.blob { width: 26px; height: 24px; border-radius: 46% 46% 40% 40%; flex: none; }
-.name { font-weight: 600; font-size: 14px; }
-.act { margin-left: auto; font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 50%; }
-.pill { padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; }
 
 .card { position: absolute; z-index: 20; background: rgba(255, 255, 255, 0.95); border-radius: 16px; box-shadow: 0 8px 24px rgba(20, 18, 30, 0.18); }
-.session-card { left: 16px; top: 16px; width: min(420px, calc(100% - 32px)); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.session-card { left: 16px; top: 16px; width: min(440px, calc(100% - 32px)); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
 .row { display: flex; align-items: center; gap: 10px; }
-h1 { margin: 0; font-family: var(--font-display); font-size: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+h1 { margin: 0; font-family: var(--font-display); font-size: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: auto; }
 .path { margin: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta { margin-right: auto; font-size: 13px; color: var(--ink-2); }
+.warn { color: var(--st-wait-fg); }
 .back { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
+.pill { padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; }
 .pill.run { background: var(--st-tool-bg); color: var(--st-tool-fg); }
 .pill.off { background: var(--st-idle-bg); color: var(--st-idle-fg); }
 .stop { min-height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line-2); background: #fff; color: var(--st-error-fg); font-weight: 500; cursor: pointer; }
 .stop:disabled { opacity: 0.6; cursor: default; }
 
-.dock { right: 16px; top: 16px; padding: 8px; display: flex; gap: 8px; }
+.dock { right: 16px; top: 16px; padding: 8px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; max-width: calc(100% - 480px); }
 .dock button { min-height: 44px; padding: 0 12px; display: flex; align-items: center; gap: 8px; border-radius: 10px; border: 1px solid var(--line-2); background: #fff; font-weight: 600; font-size: 13px; cursor: pointer; }
-.dock-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--term-accent); }
+.dock-dot { width: 8px; height: 8px; border-radius: 50%; }
 
 .tabs { display: flex; gap: 2px; }
 .tabs button {
@@ -137,4 +189,9 @@ h1 { margin: 0; font-family: var(--font-display); font-size: 18px; font-weight: 
 }
 .tabs button.on { color: var(--term-fg); border-bottom-color: var(--term-accent); }
 .tabs small { font-family: var(--font-sans); font-size: 11px; font-weight: 500; color: var(--term-muted); }
+
+.mini { flex: none; margin-top: -12px; }
+.dh { min-width: 0; margin-right: auto; }
+.dh h2 { margin: 0; font-family: var(--font-display); font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dh code { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
 </style>
