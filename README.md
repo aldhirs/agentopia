@@ -5,6 +5,8 @@ Lead (sesi utama) dan subagent jadi karakter yang bergerak sesuai aktivitasnya.
 
 Memakai login Claude Code yang sudah ada di komputer (tanpa API key).
 
+🎬 **Video singkat (30 detik):** [media/hallo-agentopia.mp4](media/hallo-agentopia.mp4)
+
 ## Menjalankan (development)
 
 Prasyarat: Node 20+, Claude Code terpasang dan sudah login (`claude auth status`).
