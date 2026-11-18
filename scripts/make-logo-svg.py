@@ -1,0 +1,32 @@
+# Generates the Agentopia mark: a slouchy bean bag (tall back, sunken seat, fabric seams) on a
+# warm tile. Writes the app icon source (build/logo.svg) and the lobby logo (src/assets/logo.svg).
+# Usage: python3 scripts/make-logo-svg.py && npx electron scripts/make-icon.cjs
+svg = '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="4 4 92 92">
+  <defs>
+    <linearGradient id="agBg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF6EA"/><stop offset="1" stop-color="#FFD8BF"/></linearGradient>
+    <linearGradient id="agBag" x1=".2" y1="0" x2=".8" y2="1"><stop offset="0" stop-color="#FFA272"/><stop offset=".55" stop-color="#F7703F"/><stop offset="1" stop-color="#D9522B"/></linearGradient>
+    <radialGradient id="agSeat" cx=".5" cy=".35" r=".7"><stop offset="0" stop-color="#C4441F"/><stop offset="1" stop-color="#E86236"/></radialGradient>
+    <clipPath id="agTile"><rect x="4" y="4" width="92" height="92" rx="21"/></clipPath>
+  </defs>
+  <g clip-path="url(#agTile)">
+    <rect x="4" y="4" width="92" height="92" fill="url(#agBg)"/>
+    <ellipse cx="50" cy="84" rx="38" ry="7" fill="#B8603C" opacity=".22"/>
+    <!-- Body: tall slumped back on the left, lower seat on the right. -->
+    <path d="M13 71 C9 50 18 24 40 18 C55 14 68 21 71 33 C72.5 39 71 44 75 47 C87 51 92 62 88 72 C84 83 62 88 47 87 C30 86 15 81 13 71 Z" fill="url(#agBag)"/>
+    <!-- Sunken seat where someone just sat. -->
+    <path d="M42 57 C49 47 70 46 80 55 C77 65 52 68 42 57 Z" fill="url(#agSeat)"/>
+    <path d="M44 58.5 C52 64 71 63 78 56.5" fill="none" stroke="#FFB38C" stroke-width="1.6" stroke-linecap="round" opacity=".55"/>
+    <!-- Fabric seams and creases. -->
+    <path d="M41 19 C33 38 31 60 36 86" fill="none" stroke="#B8441F" stroke-width="1.4" stroke-linecap="round" opacity=".35"/>
+    <path d="M62 21 C66 31 66 41 61 49" fill="none" stroke="#B8441F" stroke-width="1.4" stroke-linecap="round" opacity=".35"/>
+    <path d="M24 64 C27 61 31 61 34 63" fill="none" stroke="#B8441F" stroke-width="1.2" stroke-linecap="round" opacity=".3"/>
+    <path d="M82 66 C79 69 75 70 72 69" fill="none" stroke="#B8441F" stroke-width="1.2" stroke-linecap="round" opacity=".3"/>
+    <!-- Soft fabric sheen on the backrest. -->
+    <path d="M20 46 C22 33 31 24 43 22" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" opacity=".45"/>
+    <circle cx="47" cy="22.5" r="1.6" fill="#FFFFFF" opacity=".45"/>
+  </g>
+</svg>
+'''
+for out in ('build/logo.svg', 'src/assets/logo.svg'):
+    open(out, 'w').write(svg)
+    print('wrote', out)

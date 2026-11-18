@@ -33,7 +33,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: virtual-office-dmg
+          name: agentopia-dmg
           path: release/*.dmg
           if-no-files-found: error
 
@@ -67,7 +67,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: virtual-office-exe
+          name: agentopia-exe
           path: release/*.exe
           if-no-files-found: error
 

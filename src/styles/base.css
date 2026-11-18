@@ -1,4 +1,4 @@
-/* Design tokens from the canvas design (Virtual Office Agents). */
+/* Design tokens from the canvas design (Agentopia). */
 :root {
   --ink: #1c1b22;
   --ink-2: #3a3842;
@@ -27,9 +27,9 @@
   --st-error-fg: #b42318;    --st-error-bg: #fde2df;
   --st-done-fg: #166534;     --st-done-bg: #d7f2df;
 
-  --font-sans: 'Inter', system-ui, sans-serif;
-  --font-display: 'Space Grotesk', 'Inter', sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-sans: 'Figtree', system-ui, sans-serif;
+  --font-display: 'Fraunces Variable', Georgia, serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 
   color-scheme: light;
   font-family: var(--font-sans);
@@ -48,6 +48,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 .mono { font-family: var(--font-mono); }
+/* Fraunces: soft, slightly rounded letterforms; headings use a lighter optical size than body text. */
+h1, h2, h3 { font-variation-settings: 'SOFT' 100, 'WONK' 0; }
 
 html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after {
   animation: none !important;

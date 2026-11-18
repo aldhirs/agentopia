@@ -1,7 +1,7 @@
-# Virtual Office — Development Plan
+# Agentopia — Development Plan
 
 Status: draft v2 · 18 Nov 2026
-Desain acuan: canvas "Virtual Office Agents" (Lobby, Sesi, Status karakter)
+Desain acuan: canvas "Agentopia Agents" (Lobby, Sesi, Status karakter)
 
 Keputusan:
 - **v1 fokus macOS (`.dmg`).** Windows (`.exe`) ditunda ke Phase 7 karena belum ada mesin Windows untuk uji.
@@ -76,7 +76,7 @@ dan memvisualisasikannya sebagai kantor virtual:
 Prasyarat di komputer pemakai: Claude Code terpasang dan sudah login.
 
 Distribusi ke tim internal (DMG tanpa signing): setelah drag ke Applications, buka pertama kali
-dengan klik kanan → Open, atau jalankan `xattr -dr com.apple.quarantine "/Applications/Virtual Office.app"`.
+dengan klik kanan → Open, atau jalankan `xattr -dr com.apple.quarantine "/Applications/Agentopia.app"`.
 
 Aturan agar port ke Windows nanti murah:
 - Semua path lewat `path`/`os.homedir()`, tidak ada path Unix yang di-hardcode.
@@ -203,7 +203,7 @@ Selesai jika: alur Lobby → mulai sesi → kantor → kembali ke Lobby → masu
 - [x] Panduan instalasi tim (`docs/INSTALL.md`), termasuk membuka app tanpa signing Apple.
 - [ ] Uji instalasi bersih di Mac lain milik anggota tim.
 
-**Status: selesai untuk Mac ini (18 Nov 2026).** Bukti: `npm run dist` menghasilkan `release/Virtual-Office-0.1.0-arm64.dmg`
+**Status: selesai untuk Mac ini (18 Nov 2026).** Bukti: `npm run dist` menghasilkan `release/Agentopia-0.1.0-arm64.dmg`
 (116 MB; isi: app + shortcut Applications); `codesign --verify` lolos; `scripts/test-packaged.mjs` membuka app hasil build
 lewat `open` (PATH minimal seperti dari Finder), menemukan `claude` + login, menjalankan sesi asli dengan subagent, dan
 menyimpan screenshot kantor. Simulasi file unduhan: Gatekeeper menolak app (sesuai dugaan, tanpa signing Apple); setelah
@@ -244,7 +244,7 @@ subagent pindah ke bean bag, cek keamanan renderer), 57 unit test.
 
 ### Phase 7: Windows `.exe` · M
 - [x] electron-builder NSIS `.exe` (x64), di-build silang dari macOS: `npm run dist:win`
-      → `release/Virtual-Office-Setup-<versi>-x64.exe`. node-pty memakai prebuild Windows (ConPTY) bawaan paket.
+      → `release/Agentopia-Setup-<versi>-x64.exe`. node-pty memakai prebuild Windows (ConPTY) bawaan paket.
 - [x] `.cmd` shim (Claude Code dari npm) dijalankan lewat `cmd.exe`; AppUserModelID untuk notifikasi Windows.
 - [x] Job `windows-latest` di GitHub Actions (lint, typecheck, test, build exe).
 - [x] Panduan instalasi Windows (SmartScreen) di `docs/INSTALL.md`.

@@ -1,4 +1,4 @@
-# Virtual Office
+# Agentopia
 
 Aplikasi desktop (Electron + Vue) yang menjalankan sesi Claude Code dan menampilkannya sebagai kantor virtual:
 Lead (sesi utama) dan subagent jadi karakter yang bergerak sesuai aktivitasnya.
@@ -20,7 +20,7 @@ VO_E2E=1 npm test  # + uji end-to-end dengan sesi claude asli (memakai sedikit k
 ## Build DMG (macOS arm64)
 
 ```bash
-npm run dist                          # -> release/Virtual-Office-<versi>-arm64.dmg
+npm run dist                          # -> release/Agentopia-<versi>-arm64.dmg
 node scripts/test-packaged.mjs        # uji app hasil build (dibuka via `open`, sesi claude asli)
 ```
 

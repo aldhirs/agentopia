@@ -1,6 +1,6 @@
 // Tests the packaged app the way a user launches it (via `open`, i.e. Finder's minimal PATH):
 // starts a real session through the lobby, waits for a subagent, saves a screenshot.
-// Usage: node scripts/test-packaged.mjs [path/to/Virtual Office.app] [outDir]
+// Usage: node scripts/test-packaged.mjs [path/to/Agentopia.app] [outDir]
 // Uses a little Claude quota.
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -9,7 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const appPath = path.resolve(process.argv[2] ?? path.join(root, 'release', 'mac-arm64', 'Virtual Office.app'));
+const appPath = path.resolve(process.argv[2] ?? path.join(root, 'release', 'mac-arm64', 'Agentopia.app'));
 const outDir = path.resolve(process.argv[3] ?? path.join(os.tmpdir(), 'vo-packaged-test'));
 const sandbox = path.join(root, 'spike', 'sandbox');
 const port = 9339;
@@ -98,8 +98,8 @@ try {
   await evaluate(`window.office.listSessions().then(l => Promise.all(l.filter(s => s.status === 'running').map(s => window.office.stopSession(s.id))))`);
 } finally {
   ws.close();
-  spawnSync('osascript', ['-e', 'tell application "Virtual Office" to quit']);
-  const appRunning = () => spawnSync('pgrep', ['-f', `${appPath}/Contents/MacOS/Virtual Office`]).stdout.toString().trim() !== '';
+  spawnSync('osascript', ['-e', 'tell application "Agentopia" to quit']);
+  const appRunning = () => spawnSync('pgrep', ['-f', `${appPath}/Contents/MacOS/Agentopia`]).stdout.toString().trim() !== '';
   for (let i = 0; i < 30 && appRunning(); i++) await sleep(500);
   const left = spawnSync('pgrep', ['-f', '127.0.0.1:[0-9]*/hook/']).stdout.toString().trim();
   report.orphanProcesses = left ? left.split('\n').length : 0;

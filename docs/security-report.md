@@ -1,6 +1,6 @@
-# Laporan keamanan — Virtual Office v0.1 (dengan kantor 3D)
+# Laporan keamanan — Agentopia v0.1 (dengan kantor 3D)
 
-Tanggal: 18 Nov 2026 · Electron 45.3.4 · build `release/Virtual-Office-0.1.0-arm64.dmg`
+Tanggal: 18 Nov 2026 · Electron 45.3.4 · build `release/Agentopia-0.1.0-arm64.dmg`
 
 ## Model ancaman singkat
 

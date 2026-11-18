@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, session, shell } from 'electron';
+import fs from 'node:fs';
 import path from 'node:path';
 import type { OfficeState } from '../shared/types';
 import { HookReceiver } from './hooks/hookReceiver';
@@ -16,6 +17,23 @@ import {
 // `--vo-user-data=<dir>` keeps test runs of the packaged app away from the real history.
 const userDataArg = process.argv.find((a) => a.startsWith('--vo-user-data='));
 if (userDataArg) app.setPath('userData', userDataArg.slice('--vo-user-data='.length));
+else migrateFromOldName();
+
+/** The app used to be called "Virtual Office": carry its history and settings over once. */
+function migrateFromOldName() {
+  const dir = app.getPath('userData');
+  const old = path.join(app.getPath('appData'), 'Virtual Office');
+  for (const file of ['sessions.json', 'settings.json']) {
+    const from = path.join(old, file), to = path.join(dir, file);
+    try {
+      if (!fs.existsSync(to) && fs.existsSync(from)) {
+        fs.mkdirSync(dir, { recursive: true });
+        fs.copyFileSync(from, to);
+        fs.chmodSync(to, 0o600);
+      }
+    } catch { /* start fresh if the old data can't be read */ }
+  }
+}
 
 initLog(app.getPath('userData'));
 log('app.start', { version: app.getVersion(), platform: process.platform, arch: process.arch, electron: process.versions.electron });
@@ -36,7 +54,7 @@ function createWindow() {
     height: 900,
     minWidth: 1024,
     minHeight: 680,
-    title: 'Virtual Office',
+    title: 'Agentopia',
     backgroundColor: '#3A3644',
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
@@ -139,7 +157,7 @@ ipcMain.on('pty:resize', (_e, id: unknown, cols: unknown, rows: unknown) => {
 });
 
 // Windows shows notifications only for apps with an AppUserModelID (must match the installer's appId).
-if (process.platform === 'win32') app.setAppUserModelId('app.virtualoffice.desktop');
+if (process.platform === 'win32') app.setAppUserModelId('app.agentopia.desktop');
 
 app.whenReady().then(async () => {
   // The app needs no web permissions (camera, mic, geolocation, web notifications, …).

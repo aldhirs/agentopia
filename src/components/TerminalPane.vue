@@ -46,7 +46,7 @@ onMounted(() => {
   term = new Terminal({
     allowProposedApi: true,
     cursorBlink: true,
-    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+    fontFamily: "'IBM Plex Mono', ui-monospace, monospace",
     fontSize: office.settings?.terminalFontSize ?? 13,
     lineHeight: 1.2,
     scrollback: 10000,

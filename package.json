@@ -1,6 +1,6 @@
 {
-  "name": "virtual-office",
-  "productName": "Virtual Office",
+  "name": "agentopia",
+  "productName": "Agentopia",
   "version": "0.1.0",
   "private": true,
   "description": "Visualisasi sesi Claude Code sebagai kantor virtual",
@@ -22,9 +22,9 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@fontsource/inter": "^5.3.0",
-    "@fontsource/jetbrains-mono": "^5.3.0",
-    "@fontsource/space-grotesk": "^5.3.0",
+    "@fontsource-variable/fraunces": "^5.3.0",
+    "@fontsource/figtree": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
     "@types/node": "^26.6.6",
     "@types/three": "^0.170.0",
     "@vitejs/plugin-vue": "^6.0.11",
@@ -46,5 +46,5 @@
     "vue": "^3.5.45",
     "vue-tsc": "^3.3.14"
   },
-  "author": "Virtual Office"
+  "author": "Agentopia"
 }

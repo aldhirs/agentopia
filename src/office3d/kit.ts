@@ -53,7 +53,7 @@ export function canvasTexture(w: number, h: number, draw: (g: CanvasRenderingCon
 export function drawLabel(cv: HTMLCanvasElement, text: string, dot: string, selected = false) {
   const g = cv.getContext('2d')!;
   g.clearRect(0, 0, cv.width, cv.height);
-  g.font = '600 44px Inter, system-ui, sans-serif';
+  g.font = '600 44px Figtree, system-ui, sans-serif';
   const w = Math.min(cv.width - 12, g.measureText(text).width + 84);
   const left = (cv.width - w) / 2;
   g.fillStyle = selected ? 'rgba(28,27,34,.92)' : 'rgba(255,255,255,.9)';

@@ -1,6 +1,6 @@
-appId: app.virtualoffice.desktop
-productName: Virtual Office
-copyright: Virtual Office
+appId: app.agentopia.desktop
+productName: Agentopia
+copyright: Agentopia
 
 directories:
   output: release
@@ -51,9 +51,9 @@ nsis:
   perMachine: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
-  shortcutName: Virtual Office
-  artifactName: Virtual-Office-Setup-${version}-${arch}.${ext}
+  shortcutName: Agentopia
+  artifactName: Agentopia-Setup-${version}-${arch}.${ext}
 
 dmg:
-  title: Virtual Office ${version}
-  artifactName: Virtual-Office-${version}-${arch}.dmg
+  title: Agentopia ${version}
+  artifactName: Agentopia-${version}-${arch}.dmg

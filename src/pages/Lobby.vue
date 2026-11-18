@@ -3,6 +3,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import type { FolderInfo, HistoryEntry, PermissionMode, SessionInfo } from '../../shared/types';
 import { parseExtraArgs, previewCommand, shellQuote } from '../../shared/claudeArgs';
+import logoUrl from '../assets/logo.svg';
 import LobbyBackdrop from '../components/LobbyBackdrop.vue';
 import SettingsDialog from '../components/SettingsDialog.vue';
 import { office, openSession, recheckClaude } from '../stores/office';
@@ -161,10 +162,9 @@ watch(() => office.recentFolders, (f) => { if (!cwd.value && f.length) cwd.value
     <div class="content">
     <header class="top glass">
       <div class="brand">
-        <div class="logo" aria-hidden="true">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F3F1EC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13" /><path d="M9 21v-6h6v6" /></svg>
-        </div>
-        <h1>Virtual Office</h1>
+        <!-- Same artwork as the app icon (made by scripts/make-logo-svg.py). -->
+        <img class="logo" :src="logoUrl" alt="" width="40" height="40">
+        <h1>Agentopia</h1>
       </div>
       <span v-if="office.claude?.found && office.claude.loggedIn" class="chip ok"><span class="pulse" />Claude Code {{ office.claude.version }} · login {{ office.claude.subscriptionType ?? office.claude.authMethod }}</span>
       <template v-else-if="office.claude">
@@ -349,7 +349,7 @@ watch(() => office.recentFolders, (f) => { if (!cwd.value && f.length) cwd.value
 
 .top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 10px 12px 10px 14px; border-radius: 20px; }
 .brand { display: flex; align-items: center; gap: 12px; margin-right: auto; }
-.logo { width: 38px; height: 38px; border-radius: 12px; background: rgba(28, 27, 34, 0.88); display: grid; place-items: center; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2); }
+.logo { width: 40px; height: 40px; flex: none; filter: drop-shadow(0 3px 6px rgba(30, 58, 138, 0.25)); }
 h1 { margin: 0; font-family: var(--font-display); font-size: 20px; font-weight: 600; }
 .chip { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 999px; font-size: 13px; font-weight: 500; border: 1px solid rgba(255, 255, 255, 0.8); }
 .chip.ok { background: rgba(215, 242, 223, 0.8); color: var(--st-done-fg); }

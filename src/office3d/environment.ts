@@ -78,7 +78,7 @@ export function buildEnvironment(scene: THREE.Scene): Environment {
   add(mesh(new THREE.BoxGeometry(22.4, 3, 0.2), new THREE.MeshStandardMaterial({ map: brick, roughness: 0.95 }))).position.set(0, 1.5, -6.6);
   add(mesh(box(0.2, 3, 11.6), mat('#F1ECE3', 0.9))).position.set(-11.1, 1.5, -0.8);
   const neonTex = canvasTexture(1024, 256, (g, w, h) => {
-    g.font = 'italic 700 150px "Space Grotesk", Inter, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = 'italic 700 150px "Fraunces Variable", Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.shadowColor = '#FF4FA3'; g.shadowBlur = 40; g.fillStyle = '#FFD1EA';
     g.fillText('ship it ✦', w / 2, h / 2); g.shadowBlur = 18; g.fillText('ship it ✦', w / 2, h / 2);
   });
