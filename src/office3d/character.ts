@@ -56,6 +56,15 @@ interface Trip {
   target: SeatPose;
 }
 
+/**
+ * Seconds to advance for a frame. Frames can be far apart on purpose (8 FPS while the window is in
+ * the background), so the step must cover them; it is only capped to avoid a jump after a long pause.
+ */
+export const MAX_STEP_S = 0.5;
+export function frameStep(prevMs: number, nowMs: number): number {
+  return prevMs ? Math.min(MAX_STEP_S, Math.max(0, (nowMs - prevMs) / 1000)) : 0;
+}
+
 const ease = (k: number) => k * k * (3 - 2 * k);
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 function angleTo(from: number, to: number) {
@@ -336,7 +345,7 @@ export class CharacterRig {
   }
 
   update(now: number, animate: boolean) {
-    const dt = this.lastNow ? Math.min(0.1, (now - this.lastNow) / 1000) : 0;
+    const dt = frameStep(this.lastNow, now);
     this.lastNow = now;
     this.advance(dt);
     const t = now / 1000 + this.seed;

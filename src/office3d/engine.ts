@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import type { OfficeEffect, OfficeState } from '../../shared/types';
 import { appearanceFor } from './appearance';
-import { CharacterRig, STATUS_3D } from './character';
+import { CharacterRig, frameStep, STATUS_3D } from './character';
 import { buildEnvironment, type Environment, type SeatDevice } from './environment';
 import { extraAnchor, LEAD_ANCHOR, nextSeats3d, personFromAnchor, seatPose, type SeatRef } from './layout';
 import { disposeShared, disposeTree, sphere } from './kit';
@@ -289,7 +289,7 @@ export class OfficeEngine {
     let cap = moving || this.dirty ? this.maxFps : Math.min(this.maxFps, IDLE_FPS);
     if (!this.focused) cap = Math.min(cap, BACKGROUND_FPS);
     if (now - this.lastRender < 1000 / cap - 2) return;
-    const dtSec = this.lastRender ? Math.min(0.1, (now - this.lastRender) / 1000) : 0;
+    const dtSec = frameStep(this.lastRender, now);
     this.lastRender = now;
     if (this.autoRotate && !this.reduceMotion) this.angle += dtSec * 0.14;
     const el = this.elevation;
