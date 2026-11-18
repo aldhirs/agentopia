@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Notification, session, shell } fro
 import path from 'node:path';
 import type { OfficeState } from '../shared/types';
 import { HookReceiver } from './hooks/hookReceiver';
+import { initLog, log } from './log';
 import { locateClaude, setConfiguredClaudePath } from './session/claudeLocator';
 import { SessionManager } from './session/sessionManager';
 import { folderInfo } from './session/team';
@@ -15,6 +16,12 @@ import {
 // `--vo-user-data=<dir>` keeps test runs of the packaged app away from the real history.
 const userDataArg = process.argv.find((a) => a.startsWith('--vo-user-data='));
 if (userDataArg) app.setPath('userData', userDataArg.slice('--vo-user-data='.length));
+
+initLog(app.getPath('userData'));
+log('app.start', { version: app.getVersion(), platform: process.platform, arch: process.arch, electron: process.versions.electron });
+// Keep unexpected errors out of a modal dialog but never silent: they go to logs/main.log.
+process.on('uncaughtException', (err) => log('uncaughtException', { message: err.message, stack: err.stack }));
+process.on('unhandledRejection', (reason) => log('unhandledRejection', { reason: String(reason) }));
 
 const hooks = new HookReceiver();
 const history = new HistoryStore(app.getPath('userData'));

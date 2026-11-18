@@ -57,3 +57,4 @@ gulir ke bawah, klik **Open Anyway** untuk Virtual Office, dan konfirmasi.
 | Lobby menulis “belum login” | Jalankan `claude` di Terminal, ketik `/login`, lalu buka ulang app |
 | “Virtual Office is damaged / can’t be opened” | Jalankan perintah `xattr` di langkah 3 |
 | Sesi tidak mulai, terminal menanyakan trust folder | Jawab di jendela Terminal app (panah bawah → Enter) |
+| Sesi langsung berhenti / error lain | Kirim file log: macOS `~/Library/Application Support/Virtual Office/logs/main.log`, Windows `%APPDATA%\Virtual Office\logs\main.log` (berisi perintah yang dijalankan dan pesan error saat start, tanpa token) |
