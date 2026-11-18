@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildClaudeArgs, previewCommand, shellQuote } from '../shared/claudeArgs';
+import { buildClaudeArgs, parseExtraArgs, previewCommand, shellQuote, splitArgs, withoutContinuation } from '../shared/claudeArgs';
 import { HistoryStore } from '../electron/state/history';
 import { folderInfo, parseAgentFile } from '../electron/session/team';
 
@@ -23,6 +23,33 @@ describe('claude args', () => {
       .toBe(`cd '/Users/me/My Project' && claude --permission-mode plan 'fix it'\\''s bug'`);
     expect(previewCommand({ cwd: '' })).toBe('claude');
     expect(shellQuote('~/Projects/api')).toBe('~/Projects/api');
+  });
+});
+
+describe('extra arguments', () => {
+  it('splits like a shell', () => {
+    expect(splitArgs('--chrome --continue')).toEqual(['--chrome', '--continue']);
+    expect(splitArgs(`--append-system-prompt "be brief, please" --add-dir '/a b'`))
+      .toEqual(['--append-system-prompt', 'be brief, please', '--add-dir', '/a b']);
+    expect(splitArgs('  ')).toEqual([]);
+    expect(() => splitArgs('"open')).toThrow(/kutip/);
+  });
+
+  it('accepts the usual flags and rejects ones that break the app', () => {
+    expect(parseExtraArgs('--chrome --continue')).toEqual(['--chrome', '--continue']);
+    expect(() => parseExtraArgs('--settings x.json')).toThrow(/--settings/);
+    expect(() => parseExtraArgs('-p hi')).toThrow(/-p/);
+    expect(() => parseExtraArgs('--output-format=json')).toThrow(/--output-format/);
+    expect(() => parseExtraArgs('--model opus')).toThrow(/Model/);
+  });
+
+  it('places extras before the prompt and drops --continue when resuming a known conversation', () => {
+    expect(buildClaudeArgs({ cwd: '/x', extraArgs: ['--chrome', '--continue'], prompt: 'hi' }))
+      .toEqual(['--chrome', '--continue', 'hi']);
+    expect(buildClaudeArgs({ cwd: '/x', resumeId: 'abc', extraArgs: ['--chrome', '--continue', '-r', 'old'] }))
+      .toEqual(['--resume', 'abc', '--chrome']);
+    expect(withoutContinuation(['-c', '--resume=x', '--add-dir', '/a'])).toEqual(['--add-dir', '/a']);
+    expect(previewCommand({ cwd: '/p', extraArgs: ['--chrome', '--continue'] })).toBe('cd /p && claude --chrome --continue');
   });
 });
 

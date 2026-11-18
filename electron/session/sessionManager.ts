@@ -7,7 +7,7 @@ import * as pty from 'node-pty';
 import type {
   HistoryEntry, HookPayload, HookRecord, OfficeEffect, OfficeState, SessionInfo, StartSessionOptions,
 } from '../../shared/types';
-import { buildClaudeArgs } from '../../shared/claudeArgs';
+import { buildClaudeArgs, parseExtraArgs, shellQuote } from '../../shared/claudeArgs';
 import type { HistoryStore } from '../state/history';
 import { HookReceiver, hookSettings, TOKEN_ENV } from '../hooks/hookReceiver';
 import { createMemo, createOfficeState, reduce, type ReducerMemo } from '../state/reducer';
@@ -75,6 +75,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       permissionMode: entry.permissionMode === 'inherit' ? undefined : entry.permissionMode,
       model: entry.model,
       resumeId: entry.claudeSessionId,
+      extraArgs: entry.extraArgs,
     }, historyId);
   }
 
@@ -82,6 +83,8 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     const claude = await locateClaude();
     if (!claude.found || !claude.path) throw new Error(claude.error ?? 'Claude Code tidak ditemukan');
     if (!opts.cwd) throw new Error('Folder project wajib diisi');
+    // Re-validate here too: the renderer is not trusted to have done it.
+    if (opts.extraArgs?.length) parseExtraArgs(opts.extraArgs.map(shellQuote).join(' '));
 
     const id = crypto.randomUUID();
     const token = crypto.randomBytes(24).toString('hex');
@@ -111,7 +114,8 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     } else {
       this.history?.upsert({
         id, name: info.name, cwd: opts.cwd, permissionMode: info.permissionMode, model: opts.model,
-        worktree: opts.worktree, startedAt: now, lastActiveAt: now, subagentTypes: [],
+        worktree: opts.worktree, extraArgs: opts.extraArgs?.length ? opts.extraArgs : undefined,
+        startedAt: now, lastActiveAt: now, subagentTypes: [],
       });
     }
     this.emitHistory();

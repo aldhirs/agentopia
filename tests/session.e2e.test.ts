@@ -111,3 +111,41 @@ run('SessionManager resume e2e', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }, 300_000);
 });
+
+run('SessionManager --chrome --continue e2e', () => {
+  it('continues the latest conversation in the folder with extra args', async () => {
+    const hooks = new HookReceiver();
+    const sm = new SessionManager(hooks);
+    const cwd = path.join(__dirname, '..', 'spike', 'sandbox');
+    let stopText = '';
+    let sid = '';
+    sm.on('hook', (r) => {
+      if (r.payload.session_id) sid = r.payload.session_id;
+      if (r.payload.hook_event_name === 'Stop' && !r.payload.agent_id) stopText = String(r.payload.last_assistant_message ?? '');
+    });
+    const waitFor = async (cond: () => boolean, ms = 120_000) => {
+      const end = Date.now() + ms;
+      while (!cond() && Date.now() < end) await new Promise((r) => setTimeout(r, 500));
+      return cond();
+    };
+
+    const first = await sm.start({ cwd, model: 'sonnet', permissionMode: 'auto', prompt: 'Remember the code word SEMANGKA. Reply with just: ok' });
+    expect(await waitFor(() => !!stopText)).toBe(true);
+    const firstSid = sid;
+    await sm.stop(first.id);
+    await new Promise((r) => setTimeout(r, 1500));
+
+    stopText = '';
+    const second = await sm.start({
+      cwd, model: 'sonnet', permissionMode: 'auto', extraArgs: ['--chrome', '--continue'],
+      prompt: 'What was the code word? Reply with just the word.',
+    });
+    expect(await waitFor(() => !!stopText)).toBe(true);
+    expect(stopText.toUpperCase()).toContain('SEMANGKA');
+    expect(sid).toBeTruthy();
+    expect(firstSid).toBeTruthy();
+    await sm.stop(second.id);
+    await new Promise((r) => setTimeout(r, 1500));
+    hooks.stop();
+  }, 300_000);
+});

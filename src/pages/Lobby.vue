@@ -2,7 +2,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import type { FolderInfo, HistoryEntry, PermissionMode, SessionInfo } from '../../shared/types';
-import { previewCommand } from '../../shared/claudeArgs';
+import { parseExtraArgs, previewCommand, shellQuote } from '../../shared/claudeArgs';
 import CharacterBlob from '../components/office/CharacterBlob.vue';
 import SettingsDialog from '../components/SettingsDialog.vue';
 import { office, openSession, recheckClaude } from '../stores/office';
@@ -21,6 +21,26 @@ const worktree = ref(false);
 const starting = ref(false);
 const error = ref('');
 const folder = ref<FolderInfo | null>(null);
+const extra = ref('');
+
+const extraParsed = computed<{ args: string[]; error: string }>(() => {
+  try { return { args: parseExtraArgs(extra.value), error: '' }; } catch (e) { return { args: [], error: (e as Error).message }; }
+});
+const QUICK_FLAGS = [
+  { flag: '--continue', label: '--continue', desc: 'lanjutkan percakapan terakhir di folder ini' },
+  { flag: '--chrome', label: '--chrome', desc: 'nyalakan Claude in Chrome' },
+];
+const hasFlag = (flag: string) => extraParsed.value.args.includes(flag);
+function toggleFlag(flag: string) {
+  const args = extraParsed.value.error ? extra.value.trim().split(/\s+/).filter(Boolean) : [...extraParsed.value.args];
+  const next = args.includes(flag) ? args.filter((a) => a !== flag) : [...args, flag];
+  extra.value = next.map(shellQuote).join(' ');
+}
+// Remember the extra arguments last used in each folder (e.g. "--chrome --continue").
+function lastArgsFor(dir: string): string {
+  const h = office.history.find((x) => x.cwd === dir);
+  return h?.extraArgs?.length ? h.extraArgs.map(shellQuote).join(' ') : '';
+}
 
 const MODES: Array<{ id: PermissionMode | ''; label: string; desc: string }> = [
   { id: '', label: 'Ikut pengaturan', desc: 'Pakai mode default Claude Code di komputer ini.' },
@@ -33,9 +53,11 @@ const folderName = computed(() => cwd.value.split(/[\\/]/).filter(Boolean).pop()
 const command = computed(() => previewCommand({
   cwd: cwd.value, name: name.value || undefined, model: model.value || undefined,
   permissionMode: mode.value || undefined, worktree: worktree.value, prompt: prompt.value,
+  extraArgs: extraParsed.value.args,
 }));
 const claudeReady = computed(() => !!office.claude?.found && office.claude.loggedIn !== false);
-const canStart = computed(() => claudeReady.value && !!cwd.value && folder.value?.exists !== false && !starting.value);
+const canStart = computed(() => claudeReady.value && !!cwd.value && folder.value?.exists !== false
+  && !extraParsed.value.error && !starting.value);
 const showSettings = ref(false);
 const rechecking = ref(false);
 async function recheck() {
@@ -50,6 +72,7 @@ watch(cwd, async (dir) => {
   if (seq !== infoSeq) return;
   folder.value = info;
   if (!info.isGit) worktree.value = false;
+  if (dir) extra.value = lastArgsFor(dir);
 }, { immediate: true });
 
 async function pick() {
@@ -68,6 +91,7 @@ async function start() {
       prompt: prompt.value,
       permissionMode: mode.value || undefined,
       worktree: worktree.value || undefined,
+      extraArgs: extraParsed.value.args.length ? extraParsed.value.args : undefined,
     });
     await openSession(info.id);
   } catch (e) {
@@ -219,6 +243,19 @@ watch(() => office.recentFolders, (f) => { if (!cwd.value && f.length) cwd.value
             </button>
           </div>
         </fieldset>
+
+        <div class="field">
+          <label for="f-extra">Argumen tambahan <span class="opt">(opsional, seperti di terminal)</span></label>
+          <input id="f-extra" v-model="extra" class="mono" placeholder="--chrome --continue" spellcheck="false" autocomplete="off" />
+          <div class="recent">
+            <button
+              v-for="q in QUICK_FLAGS" :key="q.flag" type="button" class="mono"
+              :class="{ on: hasFlag(q.flag) }" :aria-pressed="hasFlag(q.flag)" :title="q.desc" @click="toggleFlag(q.flag)"
+            >{{ q.label }}</button>
+            <span>{{ hasFlag('--continue') ? 'Melanjutkan percakapan terakhir di folder ini, termasuk yang dimulai dari terminal.' : 'Klik untuk menambah/menghapus.' }}</span>
+          </div>
+          <p v-if="extraParsed.error" class="field-error">{{ extraParsed.error }}</p>
+        </div>
 
         <label class="check" :class="{ disabled: !folder?.isGit }">
           <input v-model="worktree" type="checkbox" :disabled="!folder?.isGit" />

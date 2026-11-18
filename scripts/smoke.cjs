@@ -62,6 +62,15 @@ app.on('browser-window-created', (_e, win) => {
       await sleep(400);
       await js(`[...document.querySelectorAll('.modes button')].find(b => b.textContent.includes(${JSON.stringify(PERMISSION ? 'Minta izin' : 'Ikut pengaturan')})).click()`);
       await sleep(300);
+      if (process.env.SMOKE_FORM_ONLY === '1') {
+        await js(`[...document.querySelectorAll('.recent button')].filter(b => /--(chrome|continue)/.test(b.textContent)).forEach(b => b.click())`);
+        await sleep(300);
+        await js(`document.querySelector('#f-extra').scrollIntoView({ block: 'center' })`);
+        await sleep(300);
+        await shot('01c-lobby-extra-args');
+        console.log('report', JSON.stringify(await js(`({ extra: document.querySelector('#f-extra').value, cmd: document.querySelector('.cmd code').textContent })`)));
+        return;
+      }
       await shot('01b-lobby-filled');
       await sleep(300);
       await js(`document.querySelector('button.primary').click()`);

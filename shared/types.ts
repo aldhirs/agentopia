@@ -11,6 +11,8 @@ export interface StartSessionOptions {
   worktree?: boolean;
   /** Claude Code session id to resume (`claude --resume <id>`). */
   resumeId?: string;
+  /** Extra CLI flags typed by the user, e.g. ['--chrome', '--continue']. */
+  extraArgs?: string[];
   cols?: number;
   rows?: number;
 }
@@ -121,6 +123,7 @@ export interface HistoryEntry {
   permissionMode: PermissionMode | 'inherit';
   model?: string;
   worktree?: boolean;
+  extraArgs?: string[];
   startedAt: number;
   endedAt?: number;
   lastActiveAt?: number;
