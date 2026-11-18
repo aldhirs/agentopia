@@ -1,0 +1,54 @@
+/* Design tokens from the canvas design (Virtual Office Agents). */
+:root {
+  --ink: #1c1b22;
+  --ink-2: #3a3842;
+  --muted: #5e5b66;
+  --paper: #ffffff;
+  --cream: #f3f1ec;
+  --line: #e3dfd7;
+  --line-2: #d2ccc1;
+  --accent: #3b4bd8;
+  --accent-soft: #eef0ff;
+  --accent-ink: #26318f;
+  --floor: #e9dcc4;
+  --wall: #4a4555;
+  --night: #3a3644;
+
+  --term-bg: #16151b;
+  --term-line: #2c2a34;
+  --term-fg: #e8e6f0;
+  --term-muted: #9d99aa;
+  --term-accent: #e8a07a;
+
+  --st-idle-fg: #4a4853;     --st-idle-bg: #e7e4de;
+  --st-think-fg: #1e40af;    --st-think-bg: #dbe6ff;
+  --st-tool-fg: #7a4b00;     --st-tool-bg: #fce9c2;
+  --st-wait-fg: #9a3412;     --st-wait-bg: #ffe1cc;
+  --st-error-fg: #b42318;    --st-error-bg: #fde2df;
+  --st-done-fg: #166534;     --st-done-bg: #d7f2df;
+
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-display: 'Space Grotesk', 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  color-scheme: light;
+  font-family: var(--font-sans);
+  color: var(--ink);
+  background: var(--night);
+}
+
+* { box-sizing: border-box; }
+html, body, #app { height: 100%; margin: 0; }
+body { -webkit-font-smoothing: antialiased; }
+
+button { font: inherit; color: inherit; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.mono { font-family: var(--font-mono); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

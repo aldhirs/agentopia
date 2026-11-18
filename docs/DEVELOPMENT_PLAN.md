@@ -143,9 +143,17 @@ Catatan: folder yang belum dipercaya memunculkan layar *workspace trust* di term
 Selesai jika: dari UI sederhana bisa start sesi, melihat event mentah mengalir, dan stop sesi.
 
 ### Phase 2: Terminal · M
-- [ ] Komponen `Terminal` (xterm.js): output, input keyboard, resize, copy/paste, warna.
-- [ ] Komponen `Window` overlay: minimize ke dock, maximize/restore, drag, urutan tumpukan.
-- [ ] Tab "Log terstruktur" dengan filter per agent.
+- [x] Komponen `TerminalPane` (xterm.js 6): output, input keyboard, resize ke pty, warna, Unicode 11, link bisa diklik, Cmd+C untuk menyalin seleksi.
+- [x] Riwayat output disimpan di main process, jadi terminal yang dibuka ulang menampilkan isi sebelumnya.
+- [x] Komponen `OverlayWindow`: minimize ke dock, maximize/restore (juga dobel-klik header), drag lewat header, jendela terakhir disentuh naik ke depan.
+- [x] Tab "Log terstruktur" dengan filter per agent (`shared/logFormat.ts`, diuji dengan rekaman spike).
+- [x] Variabel environment sesi Claude Code induk tidak lagi terbawa ke `claude` yang dijalankan app
+      (sebelumnya membuat transcript tidak tersimpan saat app dijalankan dari dalam Claude Code).
+- [x] Lobby sementara (`DevLobby.vue`) untuk memulai/masuk sesi; diganti Lobby final di Phase 4.
+
+**Status: selesai (18 Nov 2026).** Bukti: `scripts/smoke.cjs` membuka app, memulai sesi asli lewat form,
+dan menyimpan screenshot terminal, log, maximize, minimize/dock, dan drag (event mouse asli).
+Belum diuji manual oleh user: copy/paste, slash command, menjawab izin di terminal.
 
 Selesai jika: sesi Claude Code bisa dipakai penuh dari dalam app (prompt, izin, slash command) seperti di terminal biasa.
 

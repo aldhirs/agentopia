@@ -27,10 +27,24 @@ export async function claudeEnv(extra: Record<string, string> = {}): Promise<Rec
   env.PATH = mergePaths(await loginShellPath(), env.PATH ?? '');
   delete env.ANTHROPIC_API_KEY;
   delete env.ELECTRON_RUN_AS_NODE;
+  // When the app itself is started from inside a Claude Code session (e.g. `npm run dev` in
+  // Claude's terminal), that session's markers leak in and make the child think it is a
+  // sub-session (transcript saving off, wrong messaging socket). Drop them; keep user config
+  // such as CLAUDE_CODE_USE_BEDROCK.
+  for (const key of Object.keys(env)) {
+    if (isSessionMarker(key)) delete env[key];
+  }
   env.TERM = 'xterm-256color';
   env.COLORTERM = 'truecolor';
   if (!env.HOME) env.HOME = os.homedir();
   return { ...env, ...extra };
+}
+
+const SESSION_MARKERS = ['CLAUDECODE', 'CLAUDE_PID', 'CLAUDE_EFFORT', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_EXECPATH'];
+const SESSION_MARKER_PREFIXES = ['CLAUDE_CODE_SESSION_', 'CLAUDE_CODE_CHILD_', 'CLAUDE_CODE_MESSAGING_'];
+
+export function isSessionMarker(key: string): boolean {
+  return SESSION_MARKERS.includes(key) || SESSION_MARKER_PREFIXES.some((p) => key.startsWith(p));
 }
 
 function mergePaths(...lists: string[]): string {

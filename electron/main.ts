@@ -55,6 +55,8 @@ ipcMain.handle('session:start', (_e, opts: StartSessionOptions) => sessions.star
 ipcMain.handle('session:stop', (_e, id: string) => sessions.stop(id));
 ipcMain.handle('session:list', () => sessions.list());
 ipcMain.handle('session:state', (_e, id: string) => sessions.getState(id));
+ipcMain.handle('session:hooks', (_e, id: string) => sessions.getHooks(id));
+ipcMain.handle('pty:buffer', (_e, id: string) => sessions.getBuffer(id));
 ipcMain.on('pty:write', (_e, id: string, data: string) => sessions.write(id, data));
 ipcMain.on('pty:resize', (_e, id: string, cols: number, rows: number) => sessions.resize(id, cols, rows));
 

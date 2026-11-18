@@ -120,6 +120,8 @@ export interface OfficeApi {
   stopSession(id: string): Promise<void>;
   listSessions(): Promise<SessionInfo[]>;
   getState(id: string): Promise<OfficeState | null>;
+  getHooks(id: string): Promise<HookRecord[]>;
+  getBuffer(id: string): Promise<string>;
   write(id: string, data: string): void;
   resize(id: string, cols: number, rows: number): void;
   onPtyData(cb: (id: string, data: string) => void): () => void;

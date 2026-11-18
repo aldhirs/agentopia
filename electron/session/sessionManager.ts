@@ -17,7 +17,13 @@ interface Live {
   proc?: pty.IPty;
   state: OfficeState;
   memo: ReducerMemo;
+  /** Tail of the terminal output, replayed when a terminal view is (re)opened. */
+  buffer: string;
+  hooks: HookRecord[];
 }
+
+const BUFFER_LIMIT = 2_000_000;
+const HOOK_LIMIT = 3000;
 
 export interface SessionManagerEvents {
   data: [id: string, data: string];
@@ -41,6 +47,14 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
 
   getState(id: string): OfficeState | null {
     return this.sessions.get(id)?.state ?? null;
+  }
+
+  getBuffer(id: string): string {
+    return this.sessions.get(id)?.buffer ?? '';
+  }
+
+  getHooks(id: string): HookRecord[] {
+    return this.sessions.get(id)?.hooks ?? [];
   }
 
   async start(opts: StartSessionOptions): Promise<SessionInfo> {
@@ -72,7 +86,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       startedAt: now,
       claudeSessionId: opts.resumeId,
     };
-    const live: Live = { info, state: createOfficeState(id, now), memo: createMemo() };
+    const live: Live = { info, state: createOfficeState(id, now), memo: createMemo(), buffer: '', hooks: [] };
     this.sessions.set(id, live);
 
     const proc = pty.spawn(claude.path, args, {
@@ -83,7 +97,11 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       env: await claudeEnv({ [TOKEN_ENV]: token }),
     });
     live.proc = proc;
-    proc.onData((d) => this.emit('data', id, d));
+    proc.onData((d) => {
+      live.buffer += d;
+      if (live.buffer.length > BUFFER_LIMIT) live.buffer = live.buffer.slice(-BUFFER_LIMIT / 2);
+      this.emit('data', id, d);
+    });
     proc.onExit(({ exitCode }) => {
       live.info = { ...live.info, status: 'exited', exitCode };
       live.proc = undefined;
@@ -122,7 +140,10 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
   private onHook(sessionId: string, payload: HookPayload) {
     const live = this.sessions.get(sessionId);
     if (!live) return;
-    this.emit('hook', { sessionId, at: Date.now(), payload });
+    const record: HookRecord = { sessionId, at: Date.now(), payload };
+    live.hooks.push(record);
+    if (live.hooks.length > HOOK_LIMIT) live.hooks.splice(0, live.hooks.length - HOOK_LIMIT);
+    this.emit('hook', record);
     if (payload.session_id && !live.info.claudeSessionId) {
       live.info = { ...live.info, claudeSessionId: payload.session_id };
       this.emitSessions();

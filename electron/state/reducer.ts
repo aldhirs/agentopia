@@ -1,6 +1,9 @@
 // Pure reducer: Claude Code hook payload -> office state + visual effects.
 // Mapping is documented in docs/spike-notes.md ("Pemetaan event → status karakter").
 import type { AgentState, HookPayload, LogEntry, OfficeEffect, OfficeState } from '../../shared/types';
+import { isSyntheticPrompt, prettyType, summarizeTool } from '../../shared/toolText';
+
+export { isSyntheticPrompt, prettyType, summarizeTool };
 
 const LOG_LIMIT = 200;
 const LEAD = 'lead';
@@ -154,11 +157,6 @@ export function reduce(prev: OfficeState, memo: ReducerMemo, p: HookPayload, now
   return { state, effects };
 }
 
-export function isSyntheticPrompt(prompt: string): boolean {
-  const t = prompt.trimStart();
-  return t.startsWith('<agent-message') || t.startsWith('<task-notification');
-}
-
 function ensureSubagent(state: OfficeState, id: string, type: string, now: number): AgentState {
   const existing = state.agents[id];
   if (existing) return existing;
@@ -171,30 +169,4 @@ function ensureSubagent(state: OfficeState, id: string, type: string, now: numbe
   state.agents[id] = agent;
   state.order.push(id);
   return agent;
-}
-
-export function prettyType(type: string): string {
-  return type
-    .split(/[-_]/)
-    .filter(Boolean)
-    .map((w) => w[0].toUpperCase() + w.slice(1))
-    .join(' ');
-}
-
-export function summarizeTool(tool: string, input: Record<string, unknown> = {}): string {
-  const s = (v: unknown) => (typeof v === 'string' ? v : '');
-  const base = (f: string) => f.split(/[\\/]/).pop() ?? f;
-  let detail = '';
-  switch (tool) {
-    case 'Bash': detail = s(input.command); break;
-    case 'Read': case 'Write': case 'Edit': case 'NotebookEdit': detail = base(s(input.file_path)); break;
-    case 'Grep': detail = s(input.pattern); break;
-    case 'Glob': detail = s(input.pattern); break;
-    case 'WebFetch': detail = s(input.url); break;
-    case 'WebSearch': detail = s(input.query); break;
-    default: detail = '';
-  }
-  detail = detail.replace(/\s+/g, ' ').trim();
-  if (detail.length > 60) detail = detail.slice(0, 59) + '…';
-  return detail ? `${tool} · ${detail}` : tool;
 }
