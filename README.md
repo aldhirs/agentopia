@@ -28,3 +28,12 @@ Rilis otomatis: push tag `v*` ke GitHub → workflow `.github/workflows/release.
 melampirkannya ke GitHub Release. Panduan pasang untuk tim: [docs/INSTALL.md](docs/INSTALL.md).
 
 Dokumen: [rencana pengembangan](docs/DEVELOPMENT_PLAN.md) · [catatan spike Phase 0](docs/spike-notes.md)
+
+## Kontribusi
+
+Branch `main` dilindungi: semua perubahan lewat pull request dan CI (lint, typecheck, test) harus lolos.
+Laporan celah keamanan: lihat [SECURITY.md](SECURITY.md) (jangan lewat issue publik).
+
+## Lisensi
+
+[Apache License 2.0](LICENSE) © 2026 aldhirs

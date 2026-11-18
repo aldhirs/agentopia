@@ -220,6 +220,12 @@ export class CharacterRig {
     relabel(this.tag, `${this.name} · ${s.label}`, s.color, this.selected);
   }
 
+  /** Shows or hides the floating name tag (and status orb). */
+  setTagVisible(on: boolean) {
+    this.tag.visible = on;
+    this.orb.visible = on;
+  }
+
   setSelected(on: boolean) {
     if (on === this.selected) return;
     this.selected = on;

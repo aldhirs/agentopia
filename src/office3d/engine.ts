@@ -47,6 +47,8 @@ export class OfficeEngine {
   private reduceMotion = false;
   private angle = DEFAULT_ANGLE;
   private distance = 21.5;
+  private elevation = 0.8;
+  private target = new THREE.Vector3(0.3, 0.2, -1.1);
   private selectedId: string | null = null;
   private autoRotate = false;
   /** Frame cap: the scene is calm, so 60 FPS is plenty even on 120 Hz screens (saves GPU/battery/fans). */
@@ -65,10 +67,20 @@ export class OfficeEngine {
   private slowFrames = 0;
   private onVisibility = () => (document.hidden ? this.stop() : this.start());
 
-  constructor(private canvas: HTMLCanvasElement, opts: { reduceMotion?: boolean } = {}) {
+  private adaptive = true;
+
+  /**
+   * `quality` is for offline rendering (the promo video): full device resolution, MSAA always on,
+   * no dynamic resolution. The app itself uses the defaults.
+   */
+  constructor(private canvas: HTMLCanvasElement, opts: { reduceMotion?: boolean; quality?: boolean } = {}) {
+    if (opts.quality) {
+      this.maxPixelRatio = this.pixelRatio = window.devicePixelRatio || 1;
+      this.adaptive = false;
+    }
     this.reduceMotion = !!opts.reduceMotion;
     // MSAA is barely visible on HiDPI screens but costly; integrated GPU is plenty for this scene.
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: (window.devicePixelRatio || 1) < 1.5, powerPreference: 'default' });
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: !!opts.quality || (window.devicePixelRatio || 1) < 1.5, powerPreference: 'default' });
     this.renderer.setPixelRatio(this.pixelRatio);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -85,7 +97,7 @@ export class OfficeEngine {
     const sun = new THREE.DirectionalLight('#FFF1D6', 2.2);
     sun.position.set(7, 12, 6);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
+    sun.shadow.mapSize.set(opts.quality ? 4096 : 1024, opts.quality ? 4096 : 1024);
     Object.assign(sun.shadow.camera, { left: -13, right: 13, top: 13, bottom: -13 });
     sun.shadow.bias = -0.0004;
     this.scene.add(sun);
@@ -195,6 +207,27 @@ export class OfficeEngine {
     this.dirty = true;
   }
 
+  /** World position and facing of a character (for scripted cameras). */
+  poseOf(id: string): { x: number; y: number; z: number; rotY: number } | null {
+    const c = this.chars.get(id);
+    if (!c) return null;
+    const p = c.root.position;
+    return { x: p.x, y: p.y, z: p.z, rotY: c.root.rotation.y };
+  }
+
+  /** Shows name tags only for these characters (null = everyone). Used by close-up shots. */
+  showTags(ids: string[] | null) {
+    for (const [id, c] of this.chars) c.setTagVisible(!ids || ids.includes(id));
+    this.dirty = true;
+  }
+
+  /** Screen point (canvas CSS px) of a world position, e.g. to anchor overlay effects. */
+  project(x: number, y: number, z: number): { x: number; y: number } {
+    const r = this.canvas.getBoundingClientRect();
+    const p = new THREE.Vector3(x, y, z).project(this.camera);
+    return { x: (p.x + 1) / 2 * r.width, y: (1 - p.y) / 2 * r.height };
+  }
+
   /** Screen rectangle (canvas CSS px) around a character, for anchoring the detail card. */
   rectOf(id: string): { x: number; y: number; w: number; h: number } | null {
     const c = this.chars.get(id);
@@ -208,7 +241,15 @@ export class OfficeEngine {
 
   rotate(deltaPx: number) { this.angle -= deltaPx * 0.006; this.dirty = true; }
   zoom(deltaY: number) { this.distance = Math.min(30, Math.max(11, this.distance * (1 + deltaY * 0.001))); this.dirty = true; }
-  resetView() { this.angle = DEFAULT_ANGLE; this.distance = 21.5; this.dirty = true; }
+  resetView() { this.angle = DEFAULT_ANGLE; this.distance = 21.5; this.elevation = 0.8; this.target.set(0.3, 0.2, -1.1); this.dirty = true; }
+  /** Scripted camera (orbit angle, distance, elevation in radians, look-at point); used for demo videos. */
+  setCamera(c: { angle?: number; distance?: number; elevation?: number; target?: [number, number, number] }) {
+    if (c.angle !== undefined) this.angle = c.angle;
+    if (c.distance !== undefined) this.distance = c.distance;
+    if (c.elevation !== undefined) this.elevation = c.elevation;
+    if (c.target) this.target.set(...c.target);
+    this.dirty = true;
+  }
   setReducedMotion(on: boolean) { this.reduceMotion = on; this.dirty = true; }
   /** Slow camera orbit (used as the lobby backdrop). */
   setAutoRotate(on: boolean) { this.autoRotate = on; this.dirty = true; }
@@ -251,9 +292,13 @@ export class OfficeEngine {
     const dtSec = this.lastRender ? Math.min(0.1, (now - this.lastRender) / 1000) : 0;
     this.lastRender = now;
     if (this.autoRotate && !this.reduceMotion) this.angle += dtSec * 0.14;
-    const el = 0.8;
-    this.camera.position.set(Math.sin(this.angle) * this.distance * Math.cos(el), this.distance * Math.sin(el), Math.cos(this.angle) * this.distance * Math.cos(el));
-    this.camera.lookAt(0.3, 0.2, -1.1);
+    const el = this.elevation;
+    this.camera.position.set(
+      this.target.x + Math.sin(this.angle) * this.distance * Math.cos(el),
+      this.target.y + this.distance * Math.sin(el),
+      this.target.z + Math.cos(this.angle) * this.distance * Math.cos(el),
+    );
+    this.camera.lookAt(this.target);
     for (const c of this.chars.values()) c.update(now, !this.reduceMotion);
     this.flights = this.flights.filter((f) => {
       const k = (now - f.start) / f.dur;
@@ -272,7 +317,7 @@ export class OfficeEngine {
       const dt = now - this.lastFrame;
       this.frameTimes.push(dt);
       if (this.frameTimes.length > 240) this.frameTimes.shift();
-      this.adaptResolution(dt, cap);
+      if (this.adaptive) this.adaptResolution(dt, cap);
     }
     this.lastFrame = now;
   }

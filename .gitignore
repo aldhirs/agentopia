@@ -6,3 +6,6 @@ release/
 spike/out/
 spike/sandbox/permission-test.txt
 spike/sandbox/smoke-permission.txt
+
+# Promo video renders (large binaries; publish them as release assets instead)
+docs/media/

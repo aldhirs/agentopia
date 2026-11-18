@@ -54,6 +54,9 @@ if (params.get('mode') === 'leak') {
     }
     w.__perfResult = { mode: 'leak', cycles, samples };
   })();
+} else if (params.get('mode') === 'film') {
+  // Promo film renderer (scripts/make-video.cjs starts it once the page zoom/scale is set).
+  (window as unknown as { __startFilm: () => Promise<void> }).__startFilm = () => import('./film').then((m) => m.runFilm());
 } else if (params.get('mode') === 'visual') {
   // Manual/visual check of walking and sitting: scripts/visual-walk.cjs drives window.__vis.
   const e = new OfficeEngine(canvas);
