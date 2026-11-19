@@ -1,4 +1,4 @@
-<!-- App settings: claude location, motion, terminal font size, notifications. -->
+<!-- App settings: claude location, motion, terminal font size, music, notifications. -->
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { office, recheckClaude, updateSettings } from '../stores/office';
@@ -75,6 +75,20 @@ function close() {
           id="s-font" type="range" min="10" max="20" step="1"
           :value="office.settings?.terminalFontSize"
           @change="updateSettings({ terminalFontSize: Number(($event.target as HTMLInputElement).value) })"
+        />
+      </section>
+
+      <section>
+        <h3>Suara</h3>
+        <label class="toggle">
+          <input type="checkbox" :checked="office.settings?.music" @change="updateSettings({ music: ($event.target as HTMLInputElement).checked })" />
+          Musik latar
+        </label>
+        <label for="s-music">Volume musik: {{ office.settings?.musicVolume }}%</label>
+        <input
+          id="s-music" type="range" min="0" max="100" step="5" :disabled="!office.settings?.music"
+          :value="office.settings?.musicVolume"
+          @input="updateSettings({ musicVolume: Number(($event.target as HTMLInputElement).value) })"
         />
       </section>
 

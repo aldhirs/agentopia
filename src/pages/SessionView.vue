@@ -8,6 +8,7 @@ import OfficeFloor from '../components/office/OfficeFloor.vue';
 import Office3D from '../components/office/Office3D.vue';
 import AgentDetail from '../components/office/AgentDetail.vue';
 import CharacterBlob from '../components/office/CharacterBlob.vue';
+import MusicToggle from '../components/MusicToggle.vue';
 import { leaveSession, office, openSession } from '../stores/office';
 import { agentColor, agentTag } from '../lib/agentColor';
 import { STATUS_META } from '../lib/status';
@@ -131,6 +132,7 @@ async function stop() {
         </button>
         <h1>Sesi · {{ session?.name }}</h1>
         <span class="pill" :class="session?.status === 'running' ? 'run' : 'off'">{{ session?.status === 'running' ? 'Berjalan' : 'Selesai' }}</span>
+        <MusicToggle class="music-toggle" />
       </div>
       <p class="mono path">{{ session?.cwd }}</p>
       <div class="row">
@@ -233,6 +235,7 @@ h1 { margin: 0; font-family: var(--font-display); font-size: 18px; font-weight: 
 .notice { margin: 4px 0 0; font-size: 12px; color: var(--st-wait-fg); }
 .meta { margin-right: auto; font-size: 13px; color: var(--ink-2); }
 .warn { color: var(--st-wait-fg); }
+.music-toggle { margin-left: auto; width: 36px; min-height: 36px; height: 36px; }
 .back { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
 .pill { padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; }
 .pill.run { background: var(--st-tool-bg); color: var(--st-tool-fg); }

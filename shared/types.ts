@@ -153,6 +153,9 @@ export interface AppSettings {
   notifications: boolean;
   /** Office view: 3D startup office (default) or the lighter 2D floor. */
   officeView: '3d' | '2d';
+  /** Background music on/off and its volume (0–100). */
+  music: boolean;
+  musicVolume: number;
 }
 
 /** API exposed to the renderer by the preload script (window.office). */
