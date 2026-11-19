@@ -3,6 +3,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import type { FolderInfo, HistoryEntry, PermissionMode, SessionInfo } from '../../shared/types';
 import { parseExtraArgs, previewCommand, shellQuote } from '../../shared/claudeArgs';
+import { latestPerFolder } from '../../shared/history';
 import logoUrl from '../assets/logo.svg';
 import LobbyBackdrop from '../components/LobbyBackdrop.vue';
 import SettingsDialog from '../components/SettingsDialog.vue';
@@ -128,8 +129,8 @@ function summary(s: SessionInfo) {
 }
 
 // --- history ---
-const runningHistoryIds = computed(() => new Set(running.value.map((s) => s.historyId)));
-const previous = computed(() => office.history.filter((h) => !runningHistoryIds.value.has(h.id)).slice(0, 20));
+// One row per folder: "Lanjutkan" picks up the latest conversation there, like `claude --continue`.
+const previous = computed(() => latestPerFolder(office.history, new Set(running.value.map((s) => s.cwd))));
 const resuming = ref<string | null>(null);
 function historySummary(h: HistoryEntry) {
   const n = h.subagentTypes.length;
@@ -305,8 +306,8 @@ watch(() => office.recentFolders, (f) => { if (!cwd.value && f.length) cwd.value
         </section>
 
         <section class="card glass" aria-labelledby="hist-title">
-          <h2 id="hist-title">Sesi sebelumnya</h2>
-          <p v-if="!previous.length" class="sub">Riwayat sesi yang kamu mulai dari app ini akan muncul di sini.</p>
+          <h2 id="hist-title">Project sebelumnya</h2>
+          <p v-if="!previous.length" class="sub">Project yang pernah kamu buka dari app ini akan muncul di sini.</p>
           <div v-for="h in previous" :key="h.id" class="hist">
             <div class="grow">
               <p class="title">{{ h.name }}</p>
