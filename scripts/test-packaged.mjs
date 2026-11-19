@@ -56,6 +56,8 @@ const report = {};
 try {
   await sleep(2000);
   report.claude = await evaluate('window.office.claudeInfo()');
+  // Background music loads from inside the asar and decodes (src/lib/bgm.ts marks <html data-bgm>).
+  report.music = await evaluate(`document.documentElement.dataset.bgm ?? 'not started'`);
   await shot('p1-lobby');
   await evaluate(`(() => {
     const set = (sel, v) => { const el = document.querySelector(sel); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); };

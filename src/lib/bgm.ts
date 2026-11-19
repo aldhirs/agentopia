@@ -31,6 +31,7 @@ async function load() {
   src.loop = true;
   src.connect(gain);
   src.start();
+  document.documentElement.dataset.bgm = `loaded ${buffer.duration.toFixed(1)}s`;
 }
 
 async function apply() {
@@ -41,7 +42,7 @@ async function apply() {
     setTimeout(() => { if (!wanted() && c.state === 'running') c.suspend(); }, FADE_S * 1000);
     return;
   }
-  loading ??= load().catch((err) => { console.warn('[bgm] could not load music', err); loading = null; ctx = null; });
+  loading ??= load().catch((err) => { console.warn('[bgm] could not load music', err); document.documentElement.dataset.bgm = 'error'; loading = null; ctx = null; });
   await loading;
   if (!ctx || !gain || !wanted()) return;
   if (ctx.state !== 'running') await ctx.resume();
