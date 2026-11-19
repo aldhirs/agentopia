@@ -42,7 +42,14 @@ gulir ke bawah, klik **Open Anyway** untuk Agentopia, dan konfirmasi.
 - Folder yang belum pernah dibuka dengan Claude Code akan menanyakan *“Do you trust this folder?”* di jendela
   **Terminal** di dalam app. Pilih *Yes, I trust this folder*.
 - Di kantor: klik karakter untuk melihat detailnya; jendela Terminal dan detail bisa di-drag, minimize, maximize.
-- **Sesi sebelumnya** di lobby bisa dilanjutkan dengan tombol **Lanjutkan**.
+- **Project sebelumnya** di lobby bisa dilanjutkan dengan tombol **Lanjutkan** (percakapan terakhir di folder itu).
+- **Tambah agent**: klik **+ Tambah agent** di daftar tim lobby (atau **+ Agent baru** di kantor). Isi nama, kapan dipakai,
+  instruksi dan model, lalu pilih disimpan untuk project ini (`<folder>/.claude/agents`) atau semua project (`~/.claude/agents`).
+- **Ngobrol langsung dengan satu agent**: di lobby pilih agent di **Ngobrol dengan** (atau klik namanya di daftar tim).
+  Sesi dimulai dengan agent itu sebagai lawan bicara utama (`claude --agent <nama>`).
+- **Tanya agent dari kantor**: klik **Tanya agent** di kartu sesi (atau **Tanya <agent>** di detail subagent).
+  *Tanya di sesi ini* mengirim `@agent-<nama> <pertanyaan>` ke sesi: Lead memanggil agent itu dan jawabannya muncul di
+  terminal. *Chat terpisah* membuka kantor baru untuk ngobrol langsung dengan agent itu, dengan konteks sendiri.
 - **Argumen tambahan** di form menerima flag `claude` seperti di terminal, mis. `--chrome --continue`
   (`--continue` melanjutkan percakapan terakhir di folder itu, termasuk yang dimulai dari terminal biasa).
   Argumen terakhir per folder diingat otomatis.

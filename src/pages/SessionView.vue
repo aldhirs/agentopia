@@ -1,12 +1,14 @@
 <!-- One session = one office: full-screen floor with floating windows (Terminal, character detail). -->
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
+import type { TeamMember } from '../../shared/types';
 import OverlayWindow, { type WinState } from '../components/OverlayWindow.vue';
 import TerminalPane from '../components/TerminalPane.vue';
 import StructuredLog from '../components/StructuredLog.vue';
 import OfficeFloor from '../components/office/OfficeFloor.vue';
 import Office3D from '../components/office/Office3D.vue';
 import AgentDetail from '../components/office/AgentDetail.vue';
+import AskAgentPanel from '../components/office/AskAgentPanel.vue';
 import CharacterBlob from '../components/office/CharacterBlob.vue';
 import MusicToggle from '../components/MusicToggle.vue';
 import { leaveSession, office, openSession } from '../stores/office';
@@ -31,6 +33,16 @@ let zTop = 12;
 const termWin = reactive<WinState>({ mode: 'normal', pos: null, z: 10 });
 const detailWin = reactive<WinState>({ mode: 'min', pos: null, z: 11 });
 const tab = ref<'term' | 'log'>('term');
+const askWin = reactive<WinState>({ mode: 'min', pos: null, z: 11 });
+const askOpen = ref(false);
+const askAgent = ref<string | null>(null);
+/** Opens the "Tanya agent" window, optionally with an agent already picked. */
+function openAsk(agent: string | null = null) {
+  askAgent.value = agent;
+  askOpen.value = true;
+  askWin.mode = 'normal';
+  askWin.z = ++zTop;
+}
 
 const selectedId = ref<string | null>(null);
 const anchor = ref<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -66,15 +78,16 @@ const detailStyle = computed<Record<string, string>>(() => {
 });
 
 const dock = computed(() => {
-  const d: Array<{ key: 'term' | 'detail'; label: string; color: string }> = [];
+  const d: Array<{ key: 'term' | 'detail' | 'ask'; label: string; color: string }> = [];
   if (termWin.mode === 'min') d.push({ key: 'term', label: 'Terminal', color: '#E8A07A' });
   if (detailWin.mode === 'min' && selected.value) {
     d.push({ key: 'detail', label: `Detail · ${selected.value.label}`, color: agentColor(selected.value.type) });
   }
+  if (askOpen.value && askWin.mode === 'min') d.push({ key: 'ask', label: 'Tanya agent', color: '#3b4bd8' });
   return d;
 });
-function restore(key: 'term' | 'detail') {
-  const w = key === 'term' ? termWin : detailWin;
+function restore(key: 'term' | 'detail' | 'ask') {
+  const w = key === 'term' ? termWin : key === 'ask' ? askWin : detailWin;
   w.mode = 'normal';
   w.z = ++zTop;
 }
@@ -100,11 +113,31 @@ async function resume() {
   }
 }
 
+// Stopping interrupts whatever the session is doing, so it takes a second click to confirm.
 const stopping = ref(false);
+const confirmStop = ref(false);
+let confirmTimer: ReturnType<typeof setTimeout> | undefined;
 async function stop() {
+  if (!confirmStop.value) {
+    confirmStop.value = true;
+    clearTimeout(confirmTimer);
+    confirmTimer = setTimeout(() => { confirmStop.value = false; }, 3500);
+    return;
+  }
+  clearTimeout(confirmTimer);
+  confirmStop.value = false;
   stopping.value = true;
   try { await api.stopSession(props.sessionId); } finally { stopping.value = false; }
 }
+onBeforeUnmount(() => clearTimeout(confirmTimer));
+
+// A few faces from this project's team on the "Tanya agent" button.
+const team = ref<TeamMember[]>([]);
+watch(() => session.value?.cwd, async (cwd) => { team.value = cwd ? (await api.folderInfo(cwd)).team : []; }, { immediate: true });
+const faces = computed(() => {
+  const named = team.value.filter((m) => m.source !== 'builtin');
+  return (named.length >= 3 ? named : team.value).slice(0, 3).map((m) => agentColor(m.name));
+});
 </script>
 
 <template>
@@ -135,12 +168,7 @@ async function stop() {
         <MusicToggle class="music-toggle" />
       </div>
       <p class="mono path">{{ session?.cwd }}</p>
-      <div class="row">
-        <span class="meta">{{ counts.active }} aktif · {{ counts.done }} subagent selesai<template v-if="counts.waiting"> · <strong class="warn">{{ counts.waiting }} minta izin</strong></template></span>
-        <button v-if="session?.status === 'running'" type="button" class="stop" :disabled="stopping" @click="stop">
-          {{ stopping ? 'Menghentikan…' : 'Hentikan sesi' }}
-        </button>
-      </div>
+      <p class="meta">{{ counts.active }} aktif · {{ counts.done }} subagent selesai<template v-if="counts.waiting"> · <strong class="warn">{{ counts.waiting }} minta izin</strong></template></p>
       <ul class="roster" aria-label="Tim di kantor ini">
         <li v-for="a in roster" :key="a.id">
           <button
@@ -152,6 +180,19 @@ async function stop() {
           </button>
         </li>
       </ul>
+      <div class="actions">
+        <button type="button" class="ask-btn" @click="openAsk()">
+          <span class="faces" aria-hidden="true"><span v-for="(c, i) in faces" :key="i" class="face" :style="{ background: c }" /></span>
+          Tanya agent
+        </button>
+        <button
+          v-if="session?.status === 'running'" type="button" class="stop" :class="{ confirm: confirmStop }"
+          :disabled="stopping" :aria-label="confirmStop ? 'Klik lagi untuk menghentikan sesi' : 'Hentikan sesi'" @click="stop"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="3" fill="currentColor" /></svg>
+          {{ stopping ? 'Menghentikan…' : confirmStop ? 'Yakin hentikan?' : 'Hentikan sesi' }}
+        </button>
+      </div>
       <p v-if="failed3d" class="notice">Tampilan 3D tidak tersedia ({{ failed3d }}), memakai tampilan 2D.</p>
     </div>
 
@@ -214,7 +255,28 @@ async function stop() {
         </div>
         <span class="pill" :style="{ background: STATUS_META[selected.status].bg, color: STATUS_META[selected.status].fg }">{{ STATUS_META[selected.status].label }}</span>
       </template>
+      <div v-if="selected.kind === 'subagent'" class="detail-ask">
+        <button type="button" @click="openAsk(selected.type)">Tanya {{ selected.type }}</button>
+      </div>
       <AgentDetail :agent="selected" />
+    </OverlayWindow>
+
+    <OverlayWindow
+      v-if="askOpen && session"
+      :state="askWin"
+      label="Tanya agent"
+      :default-style="{ right: '16px', top: '16px', width: '400px', maxHeight: 'calc(100% - 32px)' }"
+      :max-inset="{ top: 16, right: 16, bottom: 16, left: 16 }"
+      @update:state="Object.assign(askWin, $event)"
+      @focus="askWin.z = ++zTop"
+    >
+      <template #header>
+        <div class="dh"><h2>Tanya agent</h2></div>
+        <button type="button" class="close-ask" aria-label="Tutup Tanya agent" @click="askOpen = false">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </template>
+      <AskAgentPanel :session="session" :agent="askAgent" />
     </OverlayWindow>
   </div>
 </template>
@@ -233,15 +295,45 @@ h1 { margin: 0; font-family: var(--font-display); font-size: 18px; font-weight: 
 .roster-chip .dot { width: 9px; height: 9px; border-radius: 50%; }
 .chip-status { font-weight: 500; }
 .notice { margin: 4px 0 0; font-size: 12px; color: var(--st-wait-fg); }
-.meta { margin-right: auto; font-size: 13px; color: var(--ink-2); }
+.meta { margin: 0; font-size: 13px; color: var(--ink-2); }
+.actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
 .warn { color: var(--st-wait-fg); }
 .music-toggle { margin-left: auto; width: 36px; min-height: 36px; height: 36px; }
+.ask-btn {
+  display: inline-flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 18px 0 10px; border-radius: 999px; border: 0;
+  background: var(--ink); color: #fff; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.3);
+}
+.ask-btn:hover .face:nth-child(2) { transform: translateY(-3px); }
+.ask-btn:focus-visible, .stop:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.faces { display: inline-flex; }
+/* Tiny versions of the office characters: a blob with two eyes. */
+.face {
+  position: relative; width: 20px; height: 19px; border-radius: 10px 10px 8px 8px; box-shadow: 0 0 0 2px var(--ink);
+  transition: transform 160ms cubic-bezier(.3, 1.6, .5, 1);
+}
+.face + .face { margin-left: -5px; }
+.face::before, .face::after { content: ''; position: absolute; top: 7px; width: 3px; height: 4px; border-radius: 2px; background: #1c1b22; }
+.face::before { left: 6px; }
+.face::after { right: 6px; }
+.detail-ask { padding: 10px 14px 0; }
+.detail-ask button { min-height: 32px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent-ink); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.close-ask { width: 32px; height: 32px; display: grid; place-items: center; border: 0; background: transparent; border-radius: 8px; cursor: pointer; color: inherit; }
 .back { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
 .pill { padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; }
 .pill.run { background: var(--st-tool-bg); color: var(--st-tool-fg); }
 .pill.off { background: var(--st-idle-bg); color: var(--st-idle-fg); }
-.stop { min-height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line-2); background: #fff; color: var(--st-error-fg); font-weight: 500; cursor: pointer; }
+.stop {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 0 14px; border-radius: 999px;
+  border: 1.5px solid transparent; background: transparent; color: var(--ink-2); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+.stop svg { color: var(--st-error-fg); }
+.stop:hover:not(:disabled) { color: var(--st-error-fg); background: var(--st-error-bg); }
+.stop.confirm { color: #fff; background: var(--st-error-fg); border-color: var(--st-error-fg); }
+.stop.confirm svg { color: #fff; }
 .stop:disabled { opacity: 0.6; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .face, .stop { transition: none; } }
 
 .ended { left: 50%; top: 16px; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 16px; font-size: 14px; max-width: calc(100% - 940px); min-width: 360px; }
 .ended button { min-height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line-2); background: #fff; font-weight: 500; cursor: pointer; white-space: nowrap; }

@@ -5,6 +5,7 @@ import type { StartSessionOptions } from './types';
 export function buildClaudeArgs(opts: StartSessionOptions): string[] {
   const args: string[] = [];
   if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
+  if (opts.agent) args.push('--agent', opts.agent);
   if (opts.model) args.push('--model', opts.model);
   if (opts.worktree) args.push('--worktree');
   if (opts.name?.trim()) args.push('--name', opts.name.trim());
@@ -64,6 +65,7 @@ const BLOCKED: Record<string, string> = {
   '-w': 'pilih lewat opsi worktree di form',
   '--name': 'isi lewat "Nama sesi" di form',
   '-n': 'isi lewat "Nama sesi" di form',
+  '--agent': 'pilih lewat "Ngobrol dengan" di form',
 };
 
 /** Parses and validates the "Argumen tambahan" field. Throws with a readable message on a problem. */

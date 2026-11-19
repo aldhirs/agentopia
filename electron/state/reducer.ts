@@ -8,12 +8,12 @@ export { isSyntheticPrompt, prettyType, summarizeTool };
 const LOG_LIMIT = 200;
 const LEAD = 'lead';
 
-export function createOfficeState(sessionId: string, now: number): OfficeState {
+export function createOfficeState(sessionId: string, now: number, leadLabel = 'Lead'): OfficeState {
   return {
     sessionId,
     agents: {
       [LEAD]: {
-        id: LEAD, kind: 'lead', type: 'lead', label: 'Lead', status: 'idle',
+        id: LEAD, kind: 'lead', type: 'lead', label: leadLabel, status: 'idle',
         startedAt: now, updatedAt: now, log: [],
       },
     },

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
 import type { OfficeApi } from '../shared/types';
 
 function listen<A extends unknown[]>(channel: string, cb: (...args: A) => void): () => void {
@@ -21,10 +21,14 @@ const api: OfficeApi = {
   resumeSession: (historyId) => ipcRenderer.invoke('session:resume', historyId),
   removeHistory: (historyId) => ipcRenderer.invoke('history:remove', historyId),
   folderInfo: (cwd) => ipcRenderer.invoke('folder:info', cwd),
+  createAgent: (agent) => ipcRenderer.invoke('agent:create', agent),
+  askAgent: (id, agent, text) => ipcRenderer.invoke('agent:ask', id, agent, text),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSettings: (patch) => ipcRenderer.invoke('settings:set', patch),
   pickFile: () => ipcRenderer.invoke('dialog:pick-file'),
   write: (id, data) => ipcRenderer.send('pty:write', id, data),
+  pathForFile: (file) => { try { return webUtils.getPathForFile(file); } catch { return ''; } },
+  platform: process.platform,
   resize: (id, cols, rows) => ipcRenderer.send('pty:resize', id, cols, rows),
   onPtyData: (cb) => listen('pty:data', cb),
   onState: (cb) => listen('office:state', cb),

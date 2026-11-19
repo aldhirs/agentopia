@@ -13,6 +13,8 @@ export interface StartSessionOptions {
   resumeId?: string;
   /** Extra CLI flags typed by the user, e.g. ['--chrome', '--continue']. */
   extraArgs?: string[];
+  /** Talk to this agent directly instead of the default Lead (`claude --agent <name>`). */
+  agent?: string;
   cols?: number;
   rows?: number;
 }
@@ -32,6 +34,8 @@ export interface SessionInfo {
   claudeSessionId?: string;
   /** Row in the persistent history (stays the same when a conversation is resumed). */
   historyId: string;
+  /** Set when the session talks to one agent directly (`claude --agent`). */
+  agent?: string;
 }
 
 export interface ClaudeInfo {
@@ -124,6 +128,7 @@ export interface HistoryEntry {
   model?: string;
   worktree?: boolean;
   extraArgs?: string[];
+  agent?: string;
   startedAt: number;
   endedAt?: number;
   lastActiveAt?: number;
@@ -136,6 +141,17 @@ export interface TeamMember {
   name: string;
   description?: string;
   source: 'builtin' | 'user' | 'project';
+}
+
+/** A new agent definition written from the app (<scope dir>/.claude/agents/<name>.md). */
+export interface NewAgent {
+  scope: 'project' | 'user';
+  /** Project folder; required for the project scope. */
+  cwd?: string;
+  name: string;
+  description: string;
+  prompt: string;
+  model?: 'sonnet' | 'opus' | 'haiku';
 }
 
 export interface FolderInfo {
@@ -173,6 +189,13 @@ export interface OfficeApi {
   resumeSession(historyId: string): Promise<SessionInfo>;
   removeHistory(historyId: string): Promise<void>;
   folderInfo(cwd: string | null): Promise<FolderInfo>;
+  /** Writes a new agent file and returns the folder's updated team. */
+  createAgent(agent: NewAgent): Promise<FolderInfo>;
+  /** Sends a question to one agent through the running session (`@agent-<name> …`). */
+  askAgent(sessionId: string, agent: string, text: string): Promise<void>;
+  /** Local path of a file the user dropped on the window ('' when it has none). */
+  pathForFile(file: File): string;
+  platform: string;
   getSettings(): Promise<AppSettings>;
   setSettings(patch: Partial<AppSettings>): Promise<AppSettings>;
   pickFile(): Promise<string | null>;

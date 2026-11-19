@@ -6,12 +6,13 @@ import { HookReceiver } from './hooks/hookReceiver';
 import { initLog, log } from './log';
 import { locateClaude, setConfiguredClaudePath } from './session/claudeLocator';
 import { SessionManager } from './session/sessionManager';
-import { folderInfo } from './session/team';
+import { createAgent, folderInfo } from './session/team';
 import { attentionChanges, waitingCount } from './state/attention';
 import { HistoryStore } from './state/history';
 import { SettingsStore } from './state/settings';
 import {
-  validateFolderArg, validateId, validatePtyData, validateSettingsPatch, validateSize, validateStartOptions,
+  validateAgentName, validateAgentQuestion, validateFolderArg, validateId, validateNewAgent, validatePtyData,
+  validateSettingsPatch, validateSize, validateStartOptions,
 } from './ipc/validate';
 
 // `--vo-user-data=<dir>` keeps test runs of the packaged app away from the real history.
@@ -140,6 +141,22 @@ ipcMain.handle('history:folders', () => history.recentFolders());
 ipcMain.handle('history:remove', (_e, id: unknown) => { history.remove(validateId(id)); send('history:changed', history.list()); });
 ipcMain.handle('session:resume', (_e, historyId: unknown) => sessions.resume(validateId(historyId)));
 ipcMain.handle('folder:info', (_e, cwd: unknown) => folderInfo(validateFolderArg(cwd)));
+ipcMain.handle('agent:create', (_e, raw: unknown) => {
+  const agent = validateNewAgent(raw);
+  const file = createAgent(agent);
+  log('agent.create', { scope: agent.scope, name: agent.name, file });
+  return folderInfo(agent.cwd ?? null);
+});
+ipcMain.handle('agent:ask', async (_e, id: unknown, agent: unknown, text: unknown) => {
+  const sid = validateId(id);
+  const name = validateAgentName(agent);
+  const question = validateAgentQuestion(text);
+  const info = sessions.list().find((s) => s.id === sid);
+  if (!info) throw new Error('Sesi tidak ditemukan');
+  // Only agents this session can actually call.
+  if (!folderInfo(info.cwd).team.some((m) => m.name === name)) throw new Error(`Agent "${name}" tidak tersedia di project ini`);
+  await sessions.askAgent(sid, name, question);
+});
 ipcMain.handle('settings:get', () => settings.get());
 ipcMain.handle('settings:set', (_e, patch: unknown) => {
   const next = settings.set(validateSettingsPatch(patch));
