@@ -81,6 +81,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       model: entry.model,
       resumeId: entry.claudeSessionId,
       extraArgs: entry.extraArgs,
+      agent: entry.agent,
     }, historyId);
   }
 
@@ -113,9 +114,10 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
       startedAt: now,
       claudeSessionId: opts.resumeId,
       historyId: historyId ?? id,
+      agent: opts.agent,
     };
     const live: Live = {
-      info, state: createOfficeState(id, now), memo: createMemo(), buffer: '', hooks: [], historyId: historyId ?? id,
+      info, state: createOfficeState(id, now, opts.agent ?? 'Lead'), memo: createMemo(), buffer: '', hooks: [], historyId: historyId ?? id,
     };
     this.sessions.set(id, live);
     if (historyId) {
@@ -123,7 +125,7 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     } else {
       this.history?.upsert({
         id, name: info.name, cwd: opts.cwd, permissionMode: info.permissionMode, model: opts.model,
-        worktree: opts.worktree, extraArgs: opts.extraArgs?.length ? opts.extraArgs : undefined,
+        worktree: opts.worktree, extraArgs: opts.extraArgs?.length ? opts.extraArgs : undefined, agent: opts.agent,
         startedAt: now, lastActiveAt: now, subagentTypes: [],
       });
     }
@@ -182,6 +184,21 @@ export class SessionManager extends EventEmitter<SessionManagerEvents> {
     const proc = this.sessions.get(id)?.proc;
     if (!proc) return;
     try { proc.write(data); } catch { /* pty already exited */ }
+  }
+
+  /**
+   * Asks one agent a question through the running session: pastes "@agent-<name> <text>" into the
+   * prompt (a bracketed paste, so the @ does not open the picker) and submits it. Claude Code turns
+   * the mention into a call to that agent. Input must be validated.
+   */
+  async askAgent(id: string, agent: string, text: string): Promise<void> {
+    const live = this.sessions.get(id);
+    if (!live?.proc) throw new Error('Sesi ini sudah berhenti');
+    const waiting = Object.values(live.state.agents).some((a) => a.status === 'waiting');
+    if (waiting) throw new Error('Ada agent yang minta izin. Jawab dulu di terminal, lalu kirim lagi');
+    this.write(id, `\x1b[200~@agent-${agent} ${text}\x1b[201~`);
+    await new Promise((r) => setTimeout(r, 250));
+    this.write(id, '\r');
   }
 
   resize(id: string, cols: number, rows: number) {

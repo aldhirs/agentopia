@@ -3,11 +3,12 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import type { FolderInfo, HistoryEntry, PermissionMode, SessionInfo } from '../../shared/types';
 import { parseExtraArgs, previewCommand, shellQuote } from '../../shared/claudeArgs';
-import { latestPerFolder } from '../../shared/history';
+import { conversationKey, latestPerFolder } from '../../shared/history';
 import logoUrl from '../assets/logo.svg';
 import LobbyBackdrop from '../components/LobbyBackdrop.vue';
 import SettingsDialog from '../components/SettingsDialog.vue';
 import MusicToggle from '../components/MusicToggle.vue';
+import AgentDialog from '../components/AgentDialog.vue';
 import { office, openSession, recheckClaude } from '../stores/office';
 import { agentColor } from '../lib/agentColor';
 import { relativeTime, duration } from '../lib/time';
@@ -25,6 +26,9 @@ const starting = ref(false);
 const error = ref('');
 const folder = ref<FolderInfo | null>(null);
 const extra = ref('');
+/** Agent to talk to directly (`claude --agent`); empty = the normal Lead. */
+const agent = ref('');
+const showNewAgent = ref(false);
 
 const extraParsed = computed<{ args: string[]; error: string }>(() => {
   try { return { args: parseExtraArgs(extra.value), error: '' }; } catch (e) { return { args: [], error: (e as Error).message }; }
@@ -56,7 +60,7 @@ const folderName = computed(() => cwd.value.split(/[\\/]/).filter(Boolean).pop()
 const command = computed(() => previewCommand({
   cwd: cwd.value, name: name.value || undefined, model: model.value || undefined,
   permissionMode: mode.value || undefined, worktree: worktree.value, prompt: prompt.value,
-  extraArgs: extraParsed.value.args,
+  extraArgs: extraParsed.value.args, agent: agent.value || undefined,
 }));
 const claudeReady = computed(() => !!office.claude?.found && office.claude.loggedIn !== false);
 const canStart = computed(() => claudeReady.value && !!cwd.value && folder.value?.exists !== false
@@ -75,6 +79,7 @@ watch(cwd, async (dir) => {
   if (seq !== infoSeq) return;
   folder.value = info;
   if (!info.isGit) worktree.value = false;
+  if (agent.value && !info.team.some((m) => m.name === agent.value)) agent.value = '';
   if (dir) extra.value = lastArgsFor(dir);
 }, { immediate: true });
 
@@ -89,8 +94,9 @@ async function start() {
   try {
     const info = await api.startSession({
       cwd: cwd.value,
-      name: name.value.trim() || undefined,
+      name: name.value.trim() || agent.value || undefined,
       model: model.value || undefined,
+      agent: agent.value || undefined,
       prompt: prompt.value,
       permissionMode: mode.value || undefined,
       worktree: worktree.value || undefined,
@@ -110,6 +116,14 @@ const team = computed(() => {
   return [{ name: 'lead', label: 'Lead', description: 'Sesi utama' }, ...members.map((m) => ({ name: m.name, label: m.name, description: m.description }))];
 });
 const teamShown = computed(() => team.value.slice(0, 14));
+/** Clicking a team member picks who to talk to in the form below (Lead = the normal session). */
+function talkTo(name: string) {
+  agent.value = name === 'lead' ? '' : name;
+}
+function agentCreated(info: FolderInfo, name: string) {
+  folder.value = info;
+  agent.value = name;
+}
 
 // --- running sessions ---
 const running = computed(() => office.sessions.filter((s) => s.status === 'running'));
@@ -131,7 +145,7 @@ function summary(s: SessionInfo) {
 
 // --- history ---
 // One row per folder: "Lanjutkan" picks up the latest conversation there, like `claude --continue`.
-const previous = computed(() => latestPerFolder(office.history, new Set(running.value.map((s) => s.cwd))));
+const previous = computed(() => latestPerFolder(office.history, new Set(running.value.map(conversationKey))));
 const resuming = ref<string | null>(null);
 function historySummary(h: HistoryEntry) {
   const n = h.subagentTypes.length;
@@ -189,10 +203,14 @@ watch(() => office.recentFolders, (f) => { if (!cwd.value && f.length) cwd.value
           <template v-if="folderName"> Tim untuk <strong>{{ folderName }}</strong>:</template></p>
       </div>
       <ul class="team" aria-label="Anggota tim">
-        <li v-for="m in teamShown" :key="m.name" :title="m.description">
-          <span class="dot" :style="{ background: agentColor(m.name) }" />{{ m.label }}
+        <li v-for="m in teamShown" :key="m.name">
+          <button
+            type="button" :class="{ on: (agent || 'lead') === m.name }" :aria-pressed="(agent || 'lead') === m.name"
+            :title="`${m.description ?? ''}${m.description ? '. ' : ''}Klik untuk ngobrol langsung dengan ${m.label}`" @click="talkTo(m.name)"
+          ><span class="dot" :style="{ background: agentColor(m.name) }" />{{ m.label }}</button>
         </li>
         <li v-if="team.length > teamShown.length" class="more">+{{ team.length - teamShown.length }}</li>
+        <li><button type="button" class="add" @click="showNewAgent = true">+ Tambah agent</button></li>
       </ul>
     </section>
 
@@ -219,10 +237,19 @@ watch(() => office.recentFolders, (f) => { if (!cwd.value && f.length) cwd.value
           </div>
         </div>
 
+        <div class="field">
+          <label for="f-agent">Ngobrol dengan</label>
+          <select id="f-agent" v-model="agent">
+            <option value="">Lead (sesi utama, bisa memanggil semua agent)</option>
+            <option v-for="m in folder?.team ?? []" :key="m.name" :value="m.name">{{ m.name }}{{ m.description ? ` · ${m.description}` : '' }}</option>
+          </select>
+          <p v-if="agent" class="hint">Kamu ngobrol langsung dengan <strong>{{ agent }}</strong> sebagai lawan bicara utama (<code>--agent {{ agent }}</code>).</p>
+        </div>
+
         <div class="two">
           <div class="field">
             <label for="f-name">Nama sesi <span class="opt">(opsional)</span></label>
-            <input id="f-name" v-model="name" :placeholder="folderName || 'nama-sesi'" />
+            <input id="f-name" v-model="name" :placeholder="agent || folderName || 'nama-sesi'" />
           </div>
           <div class="field">
             <label for="f-model">Model</label>
@@ -312,7 +339,7 @@ watch(() => office.recentFolders, (f) => { if (!cwd.value && f.length) cwd.value
           <p v-if="!previous.length" class="sub">Project yang pernah kamu buka dari app ini akan muncul di sini.</p>
           <div v-for="h in previous" :key="h.id" class="hist">
             <div class="grow">
-              <p class="title">{{ h.name }}</p>
+              <p class="title">{{ h.name }}<span v-if="h.agent" class="agent-tag">chat langsung · {{ h.agent }}</span></p>
               <p class="meta"><span class="mono">{{ h.cwd.split('/').slice(-2).join('/') }}</span> · {{ relativeTime(h.lastActiveAt ?? h.startedAt) }} · {{ historySummary(h) }}</p>
               <p v-if="h.lastActivity" class="last">{{ h.lastActivity }}</p>
             </div>
@@ -328,6 +355,7 @@ watch(() => office.recentFolders, (f) => { if (!cwd.value && f.length) cwd.value
     </main>
     </div>
     <SettingsDialog v-if="showSettings" @close="showSettings = false" />
+    <AgentDialog v-if="showNewAgent" :cwd="folder?.exists ? cwd : null" @close="showNewAgent = false" @created="agentCreated" />
   </div>
 </template>
 
@@ -367,7 +395,13 @@ h1 { margin: 0; font-family: var(--font-display); font-size: 20px; font-weight: 
 .team { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .team li { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; background: rgba(255, 255, 255, 0.62); border: 1px solid rgba(255, 255, 255, 0.85); box-shadow: inset 0 1px 0 #fff; }
 .team .dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
-.team .more { color: var(--ink-2); }
+.team .more { color: var(--ink-2); padding: 6px 4px; font-size: 13px; font-weight: 600; }
+.team li:not(.more) { padding: 0; background: none; border: 0; box-shadow: none; }
+.team button { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; min-height: 34px; border-radius: 999px; font: inherit; font-size: 13px; font-weight: 600; color: inherit; cursor: pointer; background: rgba(255, 255, 255, 0.62); border: 1px solid rgba(255, 255, 255, 0.85); box-shadow: inset 0 1px 0 #fff; }
+.team button.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.team button.add { color: var(--accent-ink); background: var(--accent-soft); border-color: rgba(59, 75, 216, 0.35); }
+.hint { margin: 0; font-size: 12.5px; color: var(--muted); }
+.agent-tag { margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink); font-size: 11.5px; font-weight: 600; }
 
 .grid { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
 .card { border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 12px; min-width: 0; background: rgba(255, 255, 255, 0.62); }

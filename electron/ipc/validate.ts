@@ -3,7 +3,7 @@
 // the main process do more than the UI could.
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AppSettings, StartSessionOptions } from '../../shared/types';
+import type { AppSettings, NewAgent, StartSessionOptions } from '../../shared/types';
 import { parseExtraArgs, shellQuote } from '../../shared/claudeArgs';
 
 export class IpcError extends Error {}
@@ -11,6 +11,10 @@ export class IpcError extends Error {}
 const MODES = new Set(['default', 'acceptEdits', 'plan', 'auto']);
 const MODEL = /^[\w.\-[\]]{1,64}$/;
 const ID = /^[\w-]{1,64}$/;
+/** Any existing agent name, including built-ins ("Explore") and plugin agents ("plugin:name"). */
+export const AGENT_NAME = /^[A-Za-z0-9][\w.:-]{0,79}$/;
+/** Names for agents created from the app: lowercase words joined by hyphens. */
+export const NEW_AGENT_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 const str = (v: unknown, name: string, max: number) => {
   if (typeof v !== 'string') throw new IpcError(`${name} harus berupa teks`);
@@ -40,6 +44,7 @@ export function validateStartOptions(raw: unknown): StartSessionOptions {
     out.model = m;
   }
   if (o.worktree !== undefined) out.worktree = o.worktree === true;
+  if (o.agent !== undefined) out.agent = validateAgentName(o.agent);
   if (o.resumeId !== undefined) {
     const r = str(o.resumeId, 'ID sesi', 64);
     if (!ID.test(r)) throw new IpcError('ID sesi tidak valid');
@@ -57,6 +62,49 @@ export function validateStartOptions(raw: unknown): StartSessionOptions {
       if (!Number.isInteger(n) || n < 10 || n > 1000) throw new IpcError(`${k} tidak valid`);
       out[k] = n;
     }
+  }
+  return out;
+}
+
+export function validateAgentName(v: unknown): string {
+  const s = str(v, 'Nama agent', 80);
+  if (!AGENT_NAME.test(s)) throw new IpcError('Nama agent tidak valid');
+  return s;
+}
+
+/** A question for one agent: plain text, no control characters (it is pasted into the terminal). */
+export function validateAgentQuestion(v: unknown): string {
+  // eslint-disable-next-line no-control-regex
+  const s = str(v, 'Pertanyaan', 20_000).replace(/\r\n?/g, '\n').replace(/[\x00-\x09\x0b-\x1f\x7f]/g, '').trim();
+  if (!s) throw new IpcError('Pertanyaan masih kosong');
+  return s;
+}
+
+export function validateNewAgent(raw: unknown): NewAgent {
+  if (!raw || typeof raw !== 'object') throw new IpcError('Data agent tidak valid');
+  const o = raw as Record<string, unknown>;
+  const scope = o.scope === 'user' ? 'user' : o.scope === 'project' ? 'project' : null;
+  if (!scope) throw new IpcError('Pilih disimpan untuk project ini atau semua project');
+  const name = str(o.name, 'Nama agent', 50).trim();
+  if (name.length < 2 || !NEW_AGENT_NAME.test(name)) {
+    throw new IpcError('Nama agent: huruf kecil, angka dan tanda hubung, minimal 2 karakter (mis. "copy-writer")');
+  }
+  const description = str(o.description, 'Kapan dipakai', 500).replace(/\s+/g, ' ').trim();
+  if (!description) throw new IpcError('Isi "Kapan dipakai" supaya Lead tahu kapan memanggil agent ini');
+  const prompt = str(o.prompt, 'Instruksi', 20_000).replace(/\r\n?/g, '\n').trim();
+  if (!prompt) throw new IpcError('Instruksi agent masih kosong');
+  const out: NewAgent = { scope, name, description, prompt };
+  if (o.model !== undefined && o.model !== '') {
+    if (!['sonnet', 'opus', 'haiku'].includes(o.model as string)) throw new IpcError('Model tidak dikenal');
+    out.model = o.model as NewAgent['model'];
+  }
+  if (scope === 'project') {
+    const cwd = str(o.cwd, 'Folder', 4096);
+    if (!path.isAbsolute(cwd)) throw new IpcError('Folder harus berupa path absolut');
+    let isDir = false;
+    try { isDir = fs.statSync(cwd).isDirectory(); } catch { /* missing */ }
+    if (!isDir) throw new IpcError('Folder project tidak ditemukan');
+    out.cwd = cwd;
   }
   return out;
 }

@@ -7,6 +7,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
+import { dropText } from '../../shared/dropPaths';
 
 const props = defineProps<{ sessionId: string; visible: boolean }>();
 const api = window.office;
@@ -101,15 +102,55 @@ onBeforeUnmount(() => {
   term?.dispose();
 });
 
+// Dropping files on the terminal pastes their paths, like a native terminal (Claude Code then reads them).
+const dragging = ref(false);
+let dragDepth = 0;
+const hasFiles = (e: DragEvent) => !!e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+function onDragEnter(e: DragEvent) {
+  if (!hasFiles(e)) return;
+  dragDepth++;
+  dragging.value = true;
+}
+function onDragOver(e: DragEvent) {
+  if (!hasFiles(e)) return;
+  e.dataTransfer!.dropEffect = 'copy';
+}
+function onDragLeave(e: DragEvent) {
+  if (!hasFiles(e)) return;
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (!dragDepth) dragging.value = false;
+}
+function onDrop(e: DragEvent) {
+  dragDepth = 0;
+  dragging.value = false;
+  const files = [...(e.dataTransfer?.files ?? [])];
+  const text = dropText(files.map((f) => api.pathForFile(f)), api.platform);
+  if (!text) return;
+  api.write(props.sessionId, `\x1b[200~${text}\x1b[201~`);
+  term?.focus();
+}
+
 defineExpose({ focus: () => term?.focus() });
 </script>
 
 <template>
-  <div ref="host" class="term-host" />
+  <div
+    class="term-wrap" :class="{ dragging }"
+    @dragenter.prevent="onDragEnter" @dragover.prevent="onDragOver" @dragleave="onDragLeave" @drop.prevent="onDrop"
+  >
+    <div ref="host" class="term-host" />
+    <div v-if="dragging" class="drop-hint" aria-hidden="true"><span>Lepas untuk menempel path file ke Claude</span></div>
+  </div>
 </template>
 
 <style scoped>
-.term-host { flex: 1; min-height: 0; padding: 8px 4px 4px 12px; background: var(--term-bg); }
+.term-wrap { position: relative; flex: 1; min-height: 0; display: flex; }
+.drop-hint {
+  position: absolute; inset: 6px; display: grid; place-items: center; pointer-events: none; border-radius: 12px;
+  border: 2px dashed var(--term-accent); background: rgba(232, 160, 122, 0.12);
+}
+.drop-hint span { padding: 8px 14px; border-radius: 999px; background: var(--term-bg); color: var(--term-fg); font-size: 13px; font-weight: 600; }
+.term-host { flex: 1; min-height: 0; min-width: 0; padding: 8px 4px 4px 12px; background: var(--term-bg); }
 .term-host :deep(.xterm) { height: 100%; }
 .term-host :deep(.xterm-viewport) { background: var(--term-bg) !important; }
 </style>

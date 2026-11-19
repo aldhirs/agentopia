@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { FolderInfo, TeamMember } from '../../shared/types';
+import type { FolderInfo, NewAgent, TeamMember } from '../../shared/types';
 
 const BUILTIN: TeamMember[] = [
   { name: 'general-purpose', description: 'Agent serbaguna bawaan Claude Code', source: 'builtin' },
@@ -18,10 +18,12 @@ export function parseAgentFile(text: string, fallbackName: string): { name: stri
     const line = front.match(new RegExp(`^${key}:\\s*(.*)$`, 'm'));
     if (!line) return undefined;
     let v = line[1].trim();
-    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
+    if (v.startsWith('"') && v.endsWith('"')) {
+      try { v = JSON.parse(v) as string; } catch { v = v.slice(1, -1); }
+    } else if (v.startsWith("'") && v.endsWith("'")) v = v.slice(1, -1);
     return v || undefined;
   };
-  const description = field('description')?.replace(/\\n/g, ' ');
+  const description = field('description')?.replace(/\\n|\n/g, ' ');
   return { name: field('name') ?? fallbackName, description: description && description.length > 160 ? `${description.slice(0, 159)}…` : description };
 }
 
@@ -47,4 +49,30 @@ export function folderInfo(cwd: string | null, home = os.homedir()): FolderInfo 
   const byName = new Map<string, TeamMember>();
   for (const a of [...BUILTIN, ...user, ...project]) byName.set(a.name, a);
   return { path: cwd, exists, isGit, team: [...byName.values()] };
+}
+
+export class AgentExistsError extends Error {}
+
+/** Folder that holds agents for a scope: <project>/.claude/agents or ~/.claude/agents. */
+export function agentsDir(agent: Pick<NewAgent, 'scope' | 'cwd'>, home = os.homedir()): string {
+  return agent.scope === 'user' ? path.join(home, '.claude', 'agents') : path.join(agent.cwd!, '.claude', 'agents');
+}
+
+/** Agent file in Claude Code's format: YAML front matter + the system prompt. */
+export function agentMarkdown(agent: NewAgent): string {
+  const lines = ['---', `name: ${agent.name}`, `description: ${JSON.stringify(agent.description)}`];
+  if (agent.model) lines.push(`model: ${agent.model}`);
+  lines.push('---', '', agent.prompt, '');
+  return lines.join('\n');
+}
+
+/** Writes a new agent (never overwrites one) and returns the file path. Input must be validated. */
+export function createAgent(agent: NewAgent, home = os.homedir()): string {
+  const dir = agentsDir(agent, home);
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `${agent.name}.md`);
+  const builtin = BUILTIN.some((b) => b.name.toLowerCase() === agent.name.toLowerCase());
+  if (builtin || fs.existsSync(file)) throw new AgentExistsError(`Agent "${agent.name}" sudah ada, pakai nama lain`);
+  fs.writeFileSync(file, agentMarkdown(agent), { flag: 'wx' });
+  return file;
 }

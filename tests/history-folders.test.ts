@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { latestPerFolder } from '../shared/history';
+import { conversationKey, latestPerFolder } from '../shared/history';
 import type { HistoryEntry } from '../shared/types';
 
 const entry = (id: string, cwd: string, at: number): HistoryEntry =>
@@ -18,10 +18,16 @@ describe('latestPerFolder', () => {
   });
 
   it('leaves out folders that already have a running session', () => {
-    expect(latestPerFolder(list, new Set(['/p/alpha'])).map((h) => h.id)).toEqual(['b1']);
+    expect(latestPerFolder(list, new Set([conversationKey({ cwd: '/p/alpha' })])).map((h) => h.id)).toEqual(['b1']);
   });
 
   it('respects the limit', () => {
     expect(latestPerFolder(list, new Set(), 1).map((h) => h.id)).toEqual(['a2']);
+  });
+
+  it('keeps a direct chat with an agent as its own row', () => {
+    const chat = { ...entry('c1', '/p/alpha', 600), agent: 'copy-writer' };
+    expect(latestPerFolder([...list, chat], new Set()).map((h) => h.id)).toEqual(['c1', 'a2', 'b1']);
+    expect(latestPerFolder([...list, chat], new Set([conversationKey({ cwd: '/p/alpha' })])).map((h) => h.id)).toEqual(['c1', 'b1']);
   });
 });
