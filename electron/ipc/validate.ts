@@ -90,6 +90,8 @@ export function validateSettingsPatch(raw: unknown): Partial<AppSettings> {
   if (o.notifications !== undefined) out.notifications = o.notifications === true;
   if (o.terminalFontSize !== undefined) out.terminalFontSize = Number(o.terminalFontSize);
   if (o.officeView !== undefined) out.officeView = o.officeView === '2d' ? '2d' : '3d';
+  if (o.music !== undefined) out.music = o.music === true;
+  if (o.musicVolume !== undefined) out.musicVolume = Number(o.musicVolume);
   return out;
 }
 
