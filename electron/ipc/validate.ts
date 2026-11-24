@@ -140,6 +140,7 @@ export function validateSettingsPatch(raw: unknown): Partial<AppSettings> {
   if (o.officeView !== undefined) out.officeView = o.officeView === '2d' ? '2d' : '3d';
   if (o.music !== undefined) out.music = o.music === true;
   if (o.musicVolume !== undefined) out.musicVolume = Number(o.musicVolume);
+  if (o.npcs !== undefined) out.npcs = o.npcs === true;
   return out;
 }
 

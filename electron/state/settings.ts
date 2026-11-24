@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   officeView: '3d',
   music: true,
   musicVolume: 30,
+  npcs: true,
 };
 
 export class SettingsStore {
@@ -44,5 +45,6 @@ function sanitize(s: AppSettings): AppSettings {
     officeView: s.officeView === '2d' ? '2d' : '3d',
     music: s.music !== false,
     musicVolume: Math.min(100, Math.max(0, Math.round(Number(s.musicVolume ?? 30)) || 0)),
+    npcs: s.npcs !== false,
   };
 }

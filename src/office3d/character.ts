@@ -10,6 +10,11 @@ import type { P2 } from './nav';
 import { box, capsule, cyl, labelSprite, mat, mesh, relabel, sphere } from './kit';
 
 export type Pose = 'idle' | 'think' | 'tool' | 'wait' | 'error' | 'done';
+/** What a standing character does at a station in the lead office. */
+/** What a standing character does at a spot: Lead stations, plus office staff (NPC) activities. */
+export type StandActivity = 'read' | 'rack' | 'board' | 'phone' | 'wave' | 'sip' | 'water' | 'cue' | 'look' | 'chat' | 'cheer';
+
+interface StandPose { L: number[]; R: number[]; head: number; dy: number; lean?: number; turn?: number }
 
 export const STATUS_3D: Record<AgentStatus, { pose: Pose; color: string; label: string }> = {
   idle: { pose: 'idle', color: '#9A96A6', label: 'Idle' },
@@ -54,6 +59,8 @@ interface Trip {
   slideFrom: P2;
   slideTo: P2;
   target: SeatPose;
+  /** false = stop and stand at the target (a station) instead of sitting down. */
+  sit: boolean;
 }
 
 /**
@@ -105,6 +112,14 @@ export class CharacterRig {
   private gait = 0;
   private walkAmt = 0;
   private lastNow = 0;
+  /** Activity while standing still at a station (arms, head, props). */
+  activity: StandActivity | null = null;
+  private book: THREE.Object3D;
+  private phone: THREE.Object3D;
+  /** Props of the office staff, built on first use: cup, watering can, billiard cue. */
+  private cup?: THREE.Object3D;
+  private can?: THREE.Object3D;
+  private cue?: THREE.Object3D;
   /** Invisible capsule used for click picking. */
   readonly hit: THREE.Mesh;
 
@@ -156,6 +171,21 @@ export class CharacterRig {
     };
     this.L = arm(-1);
     this.R = arm(1);
+
+    // Props for station activities: a book held in both hands, a phone in the right hand.
+    this.book = new THREE.Group();
+    const cover = mesh(box(0.3, 0.035, 0.22), mat('#F78154', 0.7), false);
+    const pages = mesh(box(0.28, 0.03, 0.2), mat('#FBFAF7', 0.8), false); pages.position.y = 0.012;
+    this.book.add(cover, pages);
+    this.book.position.set(0, 1.0 - HIP_Y, 0.36); this.book.rotation.x = -0.75;
+    this.book.visible = false;
+    this.upper.add(this.book);
+    this.phone = mesh(box(0.075, 0.14, 0.012), mat('#1C1B22', 0.3, 0.2), false);
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.064, 0.12), new THREE.MeshStandardMaterial({ color: '#111111', emissive: new THREE.Color('#9FD8FF'), emissiveIntensity: 1.2 }));
+    glass.position.z = 0.007; this.phone.add(glass);
+    this.phone.position.set(0, -0.31, 0.06); this.phone.rotation.x = -1.2;
+    this.phone.visible = false;
+    this.R.el.add(this.phone);
 
     this.orbMat = new THREE.MeshStandardMaterial({ color: '#9A96A6', emissive: new THREE.Color('#9A96A6'), emissiveIntensity: 2 });
     this.orb = new THREE.Mesh(sphere(0.06, 16, 12), this.orbMat);
@@ -219,14 +249,43 @@ export class CharacterRig {
     tip.position.y = 0.34; h.add(tip);
   }
 
-  setStatus(status: AgentStatus) {
+  /** `label` replaces the status text on the name tag (e.g. "Membaca kode" at the bookshelf). */
+  setStatus(status: AgentStatus, label?: string) {
     const s = STATUS_3D[status];
     this.pose = s.pose;
-    this.statusLabel = s.label;
+    this.statusLabel = label ?? s.label;
     this.statusColor = s.color;
     this.orbMat.color.set(s.color);
     this.orbMat.emissive.set(s.color);
-    relabel(this.tag, `${this.name} · ${s.label}`, s.color, this.selected);
+    relabel(this.tag, `${this.name} · ${this.statusLabel}`, s.color, this.selected);
+  }
+
+  /** Office staff props, built the first time they are needed (agents never pay for them). */
+  private showProp(name: 'cup' | 'can' | 'cue', on: boolean) {
+    if (!on && !this[name]) return;
+    let p = this[name];
+    if (!p) {
+      p = new THREE.Group();
+      if (name === 'cup') {
+        const c = mesh(cyl(0.045, 0.038, 0.1, 16), mat('#FFFFFF', 0.4), false); c.position.y = 0.05; p.add(c);
+        const coffee = mesh(cyl(0.04, 0.04, 0.005, 16), mat('#5A3A22', 0.3), false); coffee.position.y = 0.098; p.add(coffee);
+        p.position.set(0, -0.3, 0.04);
+        this.R.el.add(p);
+      } else if (name === 'can') {
+        const green = mat('#4D9078', 0.5, 0.2);
+        const body = mesh(cyl(0.08, 0.09, 0.16, 16), green, false); body.position.y = -0.06; p.add(body);
+        const spout = mesh(cyl(0.012, 0.018, 0.24, 8), green, false); spout.rotation.x = Math.PI / 2 - 0.5; spout.position.set(0, -0.02, 0.17); p.add(spout);
+        p.position.set(0, -0.32, 0);
+        this.R.el.add(p);
+      } else {
+        const stick = mesh(cyl(0.012, 0.022, 1.45, 8), mat('#C79A5B', 0.5), false); stick.rotation.x = Math.PI / 2; p.add(stick);
+        p.position.set(0.12, 0.92 - HIP_Y, 0.38);
+        p.rotation.x = 0.1;
+        this.upper.add(p);
+      }
+      this[name] = p;
+    }
+    p.visible = on;
   }
 
   /** Shows or hides the floating name tag (and status orb). */
@@ -261,7 +320,7 @@ export class CharacterRig {
    * Walks to `target`: stands up (sliding to route[0]), follows the route, turns and sits down.
    * The last route point is the stand spot next to the target seat.
    */
-  walkTo(target: SeatPose, route: P2[]) {
+  walkTo(target: SeatPose, route: P2[], sit = true) {
     const here = { x: this.root.position.x, z: this.root.position.z };
     const seated = this.sit > 0;
     this.trip = {
@@ -270,8 +329,18 @@ export class CharacterRig {
       slideFrom: here,
       slideTo: seated ? route[0] : here,
       target,
+      sit,
     };
     this.seat = target;
+  }
+
+  /** Stands at a spot immediately (reduced motion), facing rotY. */
+  standAt(p: { x: number; z: number; rotY: number }) {
+    this.root.position.set(p.x, 0, p.z);
+    this.root.rotation.y = p.rotY;
+    this.seat = { ...p, type: 'desk' };
+    this.sit = 0;
+    this.trip = undefined;
   }
 
   get isMoving(): boolean {
@@ -293,7 +362,11 @@ export class CharacterRig {
   /** Advances the current trip by dt seconds. */
   private advance(dt: number) {
     const trip = this.trip;
-    if (!trip) return;
+    if (!trip) {
+      // Keep easing the steps out after arriving, so the character settles into its standing pose.
+      this.walkAmt += (0 - this.walkAmt) * Math.min(1, dt * 8);
+      return;
+    }
     const pos = this.root.position;
     let moving = false;
     if (trip.phase === 'up') {
@@ -324,7 +397,10 @@ export class CharacterRig {
       this.root.rotation.y += Math.sign(d) * Math.min(Math.abs(d), TURN_SPEED * 0.7 * dt);
       this.gait += (TURN_SPEED * 0.7 * dt / 1.6) * Math.PI * Math.min(1, Math.abs(d) * 3);
       moving = Math.abs(d) > 0.05;
-      if (Math.abs(d) < 0.01) {
+      if (Math.abs(d) < 0.01 && !trip.sit) {
+        this.root.rotation.y = trip.target.rotY;
+        this.trip = undefined;
+      } else if (Math.abs(d) < 0.01) {
         trip.phase = 'down';
         trip.slideFrom = { x: pos.x, z: pos.z };
         trip.slideTo = { x: trip.target.x, z: trip.target.z };
@@ -342,6 +418,38 @@ export class CharacterRig {
     }
     // Ease the stepping in and out so starting and stopping look natural.
     this.walkAmt += ((moving ? 1 : 0) - this.walkAmt) * Math.min(1, dt * 8);
+  }
+
+  /** Arm angles [shoulder x, shoulder z, elbow x] and head tilt while standing at a station. */
+  private standPose(t: number, wob: number): StandPose | null {
+    // Status beats the station: a permission prompt or an error shows wherever the character stands.
+    if (this.pose === 'wait') return { L: [-0.2, 0.1, -0.3], R: [0, 2.75 + wob * Math.sin(t * 7) * 0.22, -0.2], head: -0.05, dy: wob * Math.max(0, Math.sin(t * 5)) * 0.03 };
+    if (this.pose === 'error') return { L: [-0.9, 0.35, -2.2], R: [-1.0, -0.2, -2.3], head: 0.3, dy: 0 };
+    switch (this.activity) {
+      case 'read': return { L: [-0.85, 0.28, -1.0], R: [-0.85, -0.28, -1.0], head: 0.38 + wob * Math.sin(t * 0.7) * 0.04, dy: 0 };
+      case 'rack': return { L: [-0.25, 0.1, -0.35], R: [-1.25, -0.12, -0.35 - wob * Math.max(0, Math.sin(t * 9)) * 0.25], head: 0.08, dy: 0 };
+      case 'board': return { L: [-0.15, 0.12, -0.3], R: [-2.15 + wob * Math.sin(t * 2.6) * 0.12, -0.25 + wob * Math.sin(t * 4.1) * 0.22, -0.45], head: -0.12, dy: 0 };
+      case 'phone': return { L: [-0.2, 0.1, -0.3], R: [-0.75, -0.3, -1.95], head: 0.42, dy: 0 };
+      case 'wave': return { L: [-0.2, 0.1, -0.3], R: [0, 2.75 + wob * Math.sin(t * 7) * 0.22, -0.2], head: -0.05, dy: wob * Math.max(0, Math.sin(t * 5)) * 0.03 };
+      case 'sip': {
+        // Holds the cup at the chest and takes a sip every few seconds.
+        const s = wob * Math.max(0, Math.sin(t * 0.9)) ** 6;
+        return { L: [-0.15, 0.1, -0.25], R: [-0.55 - 0.35 * s, -0.22, -1.75 - 0.5 * s], head: 0.05 - 0.25 * s, dy: 0 };
+      }
+      // Arm held out level so the can pours over the foliage instead of disappearing into it.
+      case 'water': return { L: [-0.2, 0.1, -0.3], R: [-1.55, -0.1, -0.1], head: 0.3, dy: 0, lean: 0.05 };
+      case 'cue': {
+        const stroke = wob * Math.sin(t * 1.4) ** 9 * 0.35;
+        return { L: [-1.25, 0.3, -0.15], R: [-0.25 + stroke, -0.2, -1.15 + stroke], head: 0.15, dy: 0, lean: 0.45 };
+      }
+      case 'look': return { L: [0.42, 0.12, -1.0], R: [0.42, -0.12, -1.0], head: -0.05, dy: 0, turn: wob * Math.sin(t * 0.35) * 0.35 };
+      case 'chat': return {
+        L: [-0.45 - wob * Math.max(0, Math.sin(t * 2.1)) * 0.3, 0.12, -1.2], R: [-0.3, -0.12, -0.8 - wob * Math.max(0, Math.sin(t * 1.7 + 1)) * 0.6],
+        head: wob * Math.sin(t * 2.4) * 0.08, dy: 0, turn: wob * Math.sin(t * 0.5) * 0.2,
+      };
+      case 'cheer': return { L: [0, -2.85 - wob * Math.sin(t * 9) * 0.15, -0.15], R: [0, 2.85 + wob * Math.sin(t * 9) * 0.15, -0.15], head: -0.15, dy: wob * Math.max(0, Math.sin(t * 6)) * 0.06 };
+      default: return null;
+    }
   }
 
   update(now: number, animate: boolean) {
@@ -412,12 +520,32 @@ export class CharacterRig {
     this.upper.position.y = HIP_Y + dy * k;
     const swing = 0.4 * Math.sin(g) * w;
     const walkArm = { L: [swing, 0.08, -0.25], R: [-swing, -0.08, -0.25] };
+    // Standing still at a station: activity pose, blended in as the walk eases out.
+    const still = (1 - this.walkAmt) * (1 - k);
+    const act = this.trip ? null : this.standPose(t, wob);
+    if (act) {
+      for (const side of ['L', 'R'] as const) walkArm[side] = walkArm[side].map((v, i) => lerp(v, act[side][i], still));
+      this.head.rotation.x += act.head * still;
+      this.head.rotation.y += (act.turn ?? 0) * still;
+      this.upper.rotation.x += (act.lean ?? 0) * still;
+      this.upper.position.y += act.dy * still;
+    }
+    const holding = (a: StandActivity) => !!act && this.activity === a && still > 0.5;
+    this.book.visible = holding('read');
+    this.phone.visible = holding('phone');
+    this.showProp('cup', holding('sip'));
+    this.showProp('can', holding('water'));
+    this.showProp('cue', holding('cue'));
     const setArm = (a: Arm, seatedA: number[], walkA: number[]) => {
       a.sh.rotation.set(lerp(walkA[0], seatedA[0], k), 0, lerp(walkA[1], seatedA[1], k));
       a.el.rotation.set(lerp(walkA[2], seatedA[2], k), 0, 0);
     };
     setArm(this.L, arm.L, walkArm.L);
     setArm(this.R, arm.R, walkArm.R);
+    // Held props stay level in the hand whatever the forearm angle (the can tips over the plant).
+    const forearm = this.R.sh.rotation.x + this.R.el.rotation.x + this.upper.rotation.x;
+    if (this.cup?.visible) this.cup.rotation.x = -forearm;
+    if (this.can?.visible) this.can.rotation.x = -forearm + 0.55 + wob * Math.sin(t * 1.3) * 0.12;
 
     const top = this.body.position.y;
     this.orb.position.y = 1.86 + top + wob * Math.sin(t * 2.4) * 0.04;

@@ -1,7 +1,7 @@
 // Performance harness for the 3D office (not shipped in the app).
 // Loads N synthetic subagents that keep changing status, then measures frame times.
 // URL params: n (subagents, default 8), seconds (measure window, default 10), reduce=1.
-import type { AgentState, AgentStatus, OfficeState } from '../shared/types';
+import type { AgentState, AgentStatus, TodoItem, OfficeState } from '../shared/types';
 import { OfficeEngine } from './office3d/engine';
 
 const params = new URLSearchParams(location.search);
@@ -62,14 +62,25 @@ if (params.get('mode') === 'leak') {
   const e = new OfficeEngine(canvas);
   e.resize(window.innerWidth, window.innerHeight);
   const statuses: Record<string, AgentStatus> = {};
+  let lead: { status: AgentStatus; tool?: string } = { status: 'waiting_subagents' };
+  let todos: TodoItem[] | undefined;
+  const push = () => {
+    const agents: Record<string, AgentState> = { lead: { ...agent('lead', 0, lead.status), tool: lead.tool } };
+    const order = ['lead'];
+    Object.entries(statuses).forEach(([id, st], i) => { agents[id] = agent(id, i, st); order.push(id); });
+    e.sync({ sessionId: 'vis', agents, order, ended: false, todos });
+  };
   (window as unknown as { __vis: unknown }).__vis = {
     set(list: Array<[string, AgentStatus]>) {
       for (const [id, st] of list) statuses[id] = st;
-      const agents: Record<string, AgentState> = { lead: agent('lead', 0, 'waiting_subagents') };
-      const order = ['lead'];
-      Object.entries(statuses).forEach(([id, st], i) => { agents[id] = agent(id, i, st); order.push(id); });
-      e.sync({ sessionId: 'vis', agents, order, ended: false });
+      push();
     },
+    /** Lead status and running tool (drives where it goes in its office). */
+    lead(status: AgentStatus, tool?: string) { lead = { status, tool }; push(); },
+    todos(list: TodoItem[] | undefined) { todos = list; push(); },
+    camera(c: Parameters<OfficeEngine['setCamera']>[0]) { e.setCamera(c); },
+    npc(index: number, spotId: string) { e.sendNpc(index, spotId); },
+    staff(on: boolean) { e.setNpcs(on); },
     view(angle: number, zoomSteps: number) { e.resetView(); e.rotate(-angle / 0.006); e.zoom(zoomSteps); },
   };
   e.start();

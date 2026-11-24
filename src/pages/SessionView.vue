@@ -47,6 +47,11 @@ function openAsk(agent: string | null = null) {
 const selectedId = ref<string | null>(null);
 const anchor = ref<{ x: number; y: number; w: number; h: number } | null>(null);
 const selected = computed(() => (selectedId.value && state.value ? state.value.agents[selectedId.value] : undefined));
+// The Lead's todo list (TodoWrite): progress + the item in progress, expandable to the full list.
+const todos = computed(() => state.value?.todos ?? []);
+const todoDone = computed(() => todos.value.filter((t) => t.status === 'completed').length);
+const todoNow = computed(() => todos.value.find((t) => t.status === 'in_progress'));
+const todoOpen = ref(false);
 const roster = computed(() => (state.value ? state.value.order.map((id) => state.value!.agents[id]) : []));
 
 // 3D office unless the user picked 2D in settings or WebGL is not available.
@@ -180,6 +185,23 @@ const faces = computed(() => {
           </button>
         </li>
       </ul>
+      <section v-if="todos.length" class="todo" aria-label="Daftar tugas Lead">
+        <button type="button" class="todo-head" :aria-expanded="todoOpen" @click="todoOpen = !todoOpen">
+          <span class="todo-title">Tugas Lead</span>
+          <span class="todo-count">{{ todoDone }}/{{ todos.length }} selesai</span>
+          <svg class="chev" :class="{ open: todoOpen }" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
+        </button>
+        <div class="todo-bar" role="progressbar" :aria-valuenow="todoDone" aria-valuemin="0" :aria-valuemax="todos.length">
+          <span :style="{ width: `${(todoDone / todos.length) * 100}%` }" />
+        </div>
+        <p v-if="todoNow && !todoOpen" class="todo-now">{{ todoNow.activeForm || todoNow.content }}</p>
+        <ul v-if="todoOpen" class="todo-list">
+          <li v-for="(t, i) in todos" :key="i" :class="t.status">
+            <span class="mark" aria-hidden="true" />
+            <span class="sr">{{ t.status === 'completed' ? 'Selesai: ' : t.status === 'in_progress' ? 'Dikerjakan: ' : 'Belum: ' }}</span>{{ t.status === 'in_progress' && t.activeForm ? t.activeForm : t.content }}
+          </li>
+        </ul>
+      </section>
       <div class="actions">
         <button type="button" class="ask-btn" @click="openAsk()">
           <span class="faces" aria-hidden="true"><span v-for="(c, i) in faces" :key="i" class="face" :style="{ background: c }" /></span>
@@ -296,6 +318,25 @@ h1 { margin: 0; font-family: var(--font-display); font-size: 18px; font-weight: 
 .chip-status { font-weight: 500; }
 .notice { margin: 4px 0 0; font-size: 12px; color: var(--st-wait-fg); }
 .meta { margin: 0; font-size: 13px; color: var(--ink-2); }
+.todo { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; padding: 10px 12px; border-radius: 12px; background: #fbf8f1; border: 1px solid var(--line); }
+.todo-head { display: flex; align-items: center; gap: 8px; padding: 0; border: 0; background: none; font: inherit; color: var(--ink); cursor: pointer; text-align: left; }
+.todo-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+.todo-title { font-weight: 700; font-size: 13px; }
+.todo-count { margin-left: auto; font-size: 12px; color: var(--ink-2); }
+.chev { transition: transform 150ms ease; }
+.chev.open { transform: rotate(180deg); }
+.todo-bar { height: 6px; border-radius: 999px; background: #ebe5d8; overflow: hidden; }
+.todo-bar span { display: block; height: 100%; border-radius: inherit; background: #3ea76a; transition: width 300ms ease; }
+.todo-now { margin: 0; font-size: 12.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.todo-now::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: #5b8cff; vertical-align: 1px; }
+.todo-list { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-direction: column; gap: 5px; max-height: 180px; overflow-y: auto; font-size: 12.5px; line-height: 1.4; }
+.todo-list li { display: flex; gap: 8px; align-items: baseline; color: var(--ink); }
+.todo-list li.completed { color: var(--ink-2); text-decoration: line-through; text-decoration-color: rgba(58, 56, 66, 0.45); }
+.todo-list .mark { flex: none; width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--line-2); transform: translateY(1px); }
+.todo-list li.in_progress .mark { border-color: #5b8cff; background: radial-gradient(circle, #5b8cff 0 3px, transparent 3.5px); }
+.todo-list li.completed .mark { border-color: #3ea76a; background: #3ea76a; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+@media (prefers-reduced-motion: reduce) { .todo-bar span, .chev { transition: none; } }
 .actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
 .warn { color: var(--st-wait-fg); }
 .music-toggle { margin-left: auto; width: 36px; min-height: 36px; height: 36px; }

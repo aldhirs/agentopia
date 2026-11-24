@@ -34,7 +34,7 @@ function lobbyState(): OfficeState {
 function mount() {
   if (!use3d.value || !canvas.value || engine) return;
   try {
-    engine = new OfficeEngine(canvas.value, { reduceMotion: office.settings?.reduceMotion });
+    engine = new OfficeEngine(canvas.value, { reduceMotion: office.settings?.reduceMotion, npcs: office.settings?.npcs !== false });
   } catch {
     failed.value = true;
     return;
@@ -60,6 +60,7 @@ onMounted(mount);
 onBeforeUnmount(unmount);
 watch(() => props.team.map((t) => t.name).join(','), () => engine?.sync(lobbyState()));
 watch(() => office.settings?.reduceMotion, (on) => engine?.setReducedMotion(!!on));
+watch(() => office.settings?.npcs, (on) => engine?.setNpcs(on !== false));
 watch(use3d, (on) => { if (on) requestAnimationFrame(mount); else unmount(); });
 </script>
 

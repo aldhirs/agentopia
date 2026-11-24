@@ -59,7 +59,7 @@ describe('SettingsStore', () => {
   it('keeps music on at a quiet volume by default and clamps the volume', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vo-set-'));
     const s = new SettingsStore(dir);
-    expect(s.get()).toMatchObject({ music: true, musicVolume: 30 });
+    expect(s.get()).toMatchObject({ music: true, musicVolume: 30, npcs: true });
     expect(s.set({ musicVolume: 140 }).musicVolume).toBe(100);
     expect(s.set({ musicVolume: -5, music: false })).toMatchObject({ musicVolume: 0, music: false });
     expect(new SettingsStore(dir).get()).toMatchObject({ musicVolume: 0, music: false });

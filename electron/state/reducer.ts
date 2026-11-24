@@ -1,6 +1,6 @@
 // Pure reducer: Claude Code hook payload -> office state + visual effects.
 // Mapping is documented in docs/spike-notes.md ("Pemetaan event → status karakter").
-import type { AgentState, HookPayload, LogEntry, OfficeEffect, OfficeState } from '../../shared/types';
+import type { AgentState, HookPayload, LogEntry, OfficeEffect, OfficeState, TodoItem } from '../../shared/types';
 import { isSyntheticPrompt, prettyType, summarizeTool } from '../../shared/toolText';
 
 export { isSyntheticPrompt, prettyType, summarizeTool };
@@ -72,9 +72,14 @@ export function reduce(prev: OfficeState, memo: ReducerMemo, p: HookPayload, now
         touch(actorId, { status: 'tool_use', activity: 'Melapor ke Lead' });
         break;
       }
+      if (tool === 'TodoWrite' && actorId === LEAD) {
+        const todos = parseTodos(p.tool_input?.todos);
+        if (todos) state.todos = todos;
+      }
+      if (tool === 'TaskUpdate' && actorId === LEAD) state.todos = updateTask(state.todos, p.tool_input);
       const summary = summarizeTool(tool, p.tool_input);
       const detail = summary === tool ? '' : summary.slice(tool.length + 3);
-      touch(actorId, { status: 'tool_use', activity: summary }, { kind: 'tool', tool, text: detail });
+      touch(actorId, { status: 'tool_use', activity: summary, tool }, { kind: 'tool', tool, text: detail });
       break;
     }
     case 'SubagentStart': {
@@ -98,19 +103,20 @@ export function reduce(prev: OfficeState, memo: ReducerMemo, p: HookPayload, now
         if (resp.agentId && state.agents[resp.agentId] && !state.agents[resp.agentId].description) {
           touch(resp.agentId, { description: resp.description });
         }
-        touch(LEAD, { status: 'thinking', activity: 'Berpikir…' });
+        touch(LEAD, { status: 'thinking', activity: 'Berpikir…', tool: undefined });
         break;
       }
       if (tool === 'SubagentHandback') {
-        touch(actorId, { status: 'thinking', activity: 'Melapor ke Lead' }, { kind: 'status', text: 'Menyerahkan laporan ke Lead' });
+        touch(actorId, { status: 'thinking', activity: 'Melapor ke Lead', tool: undefined }, { kind: 'status', text: 'Menyerahkan laporan ke Lead' });
         break;
       }
-      touch(actorId, { status: 'thinking', activity: 'Berpikir…' });
+      if (tool === 'TaskCreate' && actorId === LEAD) state.todos = createTask(state.todos, p.tool_input, p.tool_response);
+      touch(actorId, { status: 'thinking', activity: 'Berpikir…', tool: undefined });
       break;
     }
     case 'PostToolUseFailure': {
       const tool = p.tool_name ?? 'tool';
-      touch(actorId, { status: 'error', activity: `Gagal · ${tool}` }, { kind: 'status', text: `${tool} gagal` });
+      touch(actorId, { status: 'error', activity: `Gagal · ${tool}`, tool: undefined }, { kind: 'status', text: `${tool} gagal` });
       break;
     }
     case 'PermissionRequest': {
@@ -142,7 +148,7 @@ export function reduce(prev: OfficeState, memo: ReducerMemo, p: HookPayload, now
       if (running.length > 0) {
         touch(LEAD, { status: 'waiting_subagents', activity: `Menunggu ${running.length} subagent` });
       } else {
-        touch(LEAD, { status: 'done', activity: 'Giliran selesai' },
+        touch(LEAD, { status: 'done', activity: 'Giliran selesai', tool: undefined },
           p.last_assistant_message ? { kind: 'text', text: p.last_assistant_message } : undefined);
       }
       break;
@@ -159,6 +165,61 @@ export function reduce(prev: OfficeState, memo: ReducerMemo, p: HookPayload, now
       return { state: prev, effects };
   }
   return { state, effects };
+}
+
+const TODO_LIMIT = 30;
+const TODO_TEXT = 200;
+const TODO_STATUS = new Set(['pending', 'in_progress', 'completed']);
+
+/** TodoWrite input -> todo items (bounded; unknown shapes are ignored). */
+export function parseTodos(raw: unknown): TodoItem[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: TodoItem[] = [];
+  for (const t of raw.slice(0, TODO_LIMIT)) {
+    if (!t || typeof t !== 'object') continue;
+    const o = t as Record<string, unknown>;
+    if (typeof o.content !== 'string' || !o.content.trim()) continue;
+    const status = TODO_STATUS.has(o.status as string) ? (o.status as TodoItem['status']) : 'pending';
+    const item: TodoItem = { content: o.content.trim().slice(0, TODO_TEXT), status };
+    if (typeof o.activeForm === 'string' && o.activeForm.trim()) item.activeForm = o.activeForm.trim().slice(0, TODO_TEXT);
+    out.push(item);
+  }
+  return out;
+}
+
+const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, TODO_TEXT) : undefined);
+
+/** TaskCreate (newer Claude Code): input {subject, description, activeForm}, response {task: {id, subject}}. */
+export function createTask(todos: TodoItem[] | undefined, input: unknown, response: unknown): TodoItem[] | undefined {
+  const i = (input ?? {}) as Record<string, unknown>;
+  const task = ((response ?? {}) as { task?: Record<string, unknown> }).task ?? {};
+  const content = text(task.subject) ?? text(i.subject) ?? text(i.description);
+  if (!content) return todos;
+  const list = todos ?? [];
+  const id = text(task.id) ?? (typeof task.id === 'number' ? String(task.id) : String(list.length + 1));
+  if (list.some((t) => t.id === id) || list.length >= TODO_LIMIT) return todos;
+  const item: TodoItem = { id, content, status: 'pending' };
+  const activeForm = text(i.activeForm);
+  if (activeForm) item.activeForm = activeForm;
+  return [...list, item];
+}
+
+/** TaskUpdate: input {taskId, status?, subject?, activeForm?}; status "deleted" removes the task. */
+export function updateTask(todos: TodoItem[] | undefined, input: unknown): TodoItem[] | undefined {
+  const i = (input ?? {}) as Record<string, unknown>;
+  const id = text(i.taskId) ?? (typeof i.taskId === 'number' ? String(i.taskId) : undefined);
+  if (!todos || !id || !todos.some((t) => t.id === id)) return todos;
+  if (i.status === 'deleted') return todos.filter((t) => t.id !== id);
+  return todos.map((t) => {
+    if (t.id !== id) return t;
+    const next = { ...t };
+    if (TODO_STATUS.has(i.status as string)) next.status = i.status as TodoItem['status'];
+    const subject = text(i.subject);
+    if (subject) next.content = subject;
+    const activeForm = text(i.activeForm);
+    if (activeForm) next.activeForm = activeForm;
+    return next;
+  });
 }
 
 function ensureSubagent(state: OfficeState, id: string, type: string, now: number): AgentState {

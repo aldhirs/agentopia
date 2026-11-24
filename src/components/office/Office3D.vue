@@ -28,7 +28,7 @@ function emitAnchor() {
 
 onMounted(() => {
   try {
-    engine = new OfficeEngine(canvas.value!, { reduceMotion: office.settings?.reduceMotion });
+    engine = new OfficeEngine(canvas.value!, { reduceMotion: office.settings?.reduceMotion, npcs: office.settings?.npcs !== false });
   } catch (e) {
     emit('failed', (e as Error).message);
     return;
@@ -52,6 +52,7 @@ onMounted(() => {
 watch(() => props.state, (s) => engine?.sync(s));
 watch(() => props.selectedId, (id) => { engine?.select(id); emitAnchor(); });
 watch(() => office.settings?.reduceMotion, (on) => engine?.setReducedMotion(!!on));
+watch(() => office.settings?.npcs, (on) => engine?.setNpcs(on !== false));
 
 onBeforeUnmount(() => {
   clearInterval(anchorTimer);

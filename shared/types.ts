@@ -74,6 +74,8 @@ export interface AgentState {
   description?: string;  // task description given by the lead
   status: AgentStatus;
   activity?: string;     // short text for the desk, e.g. 'Bash · go test ./...'
+  /** Tool being run right now (set on PreToolUse, cleared when it finishes). */
+  tool?: string;
   spawnToolUseId?: string;
   transcriptPath?: string;
   startedAt: number;
@@ -81,8 +83,20 @@ export interface AgentState {
   log: LogEntry[];
 }
 
+/** One item of the Lead's TodoWrite list. */
+export interface TodoItem {
+  /** Task id for the Task tools (TaskCreate/TaskUpdate); absent for TodoWrite lists. */
+  id?: string;
+  content: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  /** Present-tense text Claude Code shows while the item is in progress. */
+  activeForm?: string;
+}
+
 export interface OfficeState {
   sessionId: string;
+  /** The Lead's latest todo list (TodoWrite), shown on the board in the lead office. */
+  todos?: TodoItem[];
   claudeSessionId?: string;
   agents: Record<string, AgentState>;
   order: string[];       // agent ids in arrival order (lead first)
@@ -172,6 +186,8 @@ export interface AppSettings {
   /** Background music on/off and its volume (0–100). */
   music: boolean;
   musicVolume: number;
+  /** Office staff (NPCs) strolling around the 3D office. */
+  npcs: boolean;
 }
 
 /** API exposed to the renderer by the preload script (window.office). */

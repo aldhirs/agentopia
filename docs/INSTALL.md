@@ -42,6 +42,12 @@ gulir ke bawah, klik **Open Anyway** untuk Agentopia, dan konfirmasi.
 - Folder yang belum pernah dibuka dengan Claude Code akan menanyakan *“Do you trust this folder?”* di jendela
   **Terminal** di dalam app. Pilih *Yes, I trust this folder*.
 - Di kantor: klik karakter untuk melihat detailnya; jendela Terminal dan detail bisa di-drag, minimize, maximize.
+- Lead bergerak di ruangannya sesuai yang sedang dikerjakan: ke rak buku saat membaca kode, ke rak server saat
+  menjalankan perintah, ke papan saat menyusun daftar tugas, memegang ponsel saat mencari di web, dan melambai di
+  kaca depan saat menunggu kamu. Daftar tugas Lead juga tampil di papan dan di kartu sesi (klik untuk melihat semua).
+- Tiga staf kantor (NPC) mengisi kantor 3D: ngopi di coffee bar, menyiram tanaman, main billiard, dan melihat ke
+  jendela. Mereka bersorak saat Lead selesai. Mereka hanya hiasan (tanpa label, tidak bisa diklik) dan bisa
+  dimatikan di Pengaturan → Tampilan → Staf kantor.
 - **Project sebelumnya** di lobby bisa dilanjutkan dengan tombol **Lanjutkan** (percakapan terakhir di folder itu).
 - **Tambah agent**: klik **+ Tambah agent** di daftar tim lobby (atau **+ Agent baru** di kantor). Isi nama, kapan dipakai,
   instruksi dan model, lalu pilih disimpan untuk project ini (`<folder>/.claude/agents`) atau semua project (`~/.claude/agents`).
