@@ -2,11 +2,13 @@
 import * as THREE from 'three';
 import type { OfficeEffect, OfficeState } from '../../shared/types';
 import { appearanceFor } from './appearance';
-import { CharacterRig, frameStep, STATUS_3D } from './character';
+import { CharacterRig, frameStep, STATUS_3D, type StandActivity } from './character';
+import { initialLeadPlan, planLead, type LeadPlanState, type LeadSpot } from './leadPlan';
 import { buildEnvironment, type Environment, type SeatDevice } from './environment';
-import { extraAnchor, LEAD_ANCHOR, nextSeats3d, personFromAnchor, seatPose, type SeatRef } from './layout';
+import { extraAnchor, LEAD_ANCHOR, LEAD_STATIONS, nextSeats3d, personFromAnchor, seatPose, type SeatRef } from './layout';
 import { disposeShared, disposeTree, sphere } from './kit';
 import { NavGrid } from './nav';
+import { dwellFor, nextSpot, NPCS, spotById, type NpcDef, type NpcSpot } from './npcs';
 
 export interface EngineStats {
   fps: number;
@@ -20,6 +22,7 @@ export interface EngineStats {
   pixelRatio: number;
 }
 
+interface Npc { def: NpcDef; rig: CharacterRig; spot: NpcSpot; until: number; arrived: boolean }
 interface Flight { mesh: THREE.Mesh; line: THREE.Line; from: THREE.Vector3; to: THREE.Vector3; start: number; dur: number }
 
 const DEFAULT_ANGLE = -0.35;
@@ -29,6 +32,19 @@ const IDLE_FPS = 24;
 const BACKGROUND_FPS = 8;
 /** Idle poses barely move shadows; refresh them this often instead of every frame. */
 const IDLE_SHADOW_MS = 600;
+/** Frame rate while only office staff stroll around (decoration, so a bit lighter than agent walks). */
+const NPC_WALK_FPS = 30;
+/** How long the staff cheer when the Lead finishes. */
+const CHEER_MS = 4000;
+
+/** What the Lead does at each spot, and the text on its name tag while it works there. */
+const SPOT_ACTIVITY: Record<Exclude<LeadSpot, 'desk'>, { activity: StandActivity; label: string }> = {
+  shelf: { activity: 'read', label: 'Membaca kode' },
+  rack: { activity: 'rack', label: 'Menjalankan perintah' },
+  board: { activity: 'board', label: 'Menyusun tugas' },
+  phone: { activity: 'phone', label: 'Mencari di web' },
+  front: { activity: 'wave', label: 'Menunggu kamu' },
+};
 
 export class OfficeEngine {
   private renderer: THREE.WebGLRenderer;
@@ -68,12 +84,22 @@ export class OfficeEngine {
   private onVisibility = () => (document.hidden ? this.stop() : this.start());
 
   private adaptive = true;
+  /** Where the Lead is (or is heading) in its office, and when to look again (lingering, dwell time). */
+  private leadPlan: LeadPlanState = initialLeadPlan();
+  private leadAt: LeadSpot | null = null;
+  private leadTimer: ReturnType<typeof setTimeout> | undefined;
+  private lastState: OfficeState | null = null;
+  private lastTodos: unknown = null;
+  /** Office staff strolling between the coffee bar, plants, billiard and windows (decoration only). */
+  private npcs: Npc[] = [];
+  private cheerUntil = 0;
+  private leadDone = false;
 
   /**
    * `quality` is for offline rendering (the promo video): full device resolution, MSAA always on,
    * no dynamic resolution. The app itself uses the defaults.
    */
-  constructor(private canvas: HTMLCanvasElement, opts: { reduceMotion?: boolean; quality?: boolean } = {}) {
+  constructor(private canvas: HTMLCanvasElement, opts: { reduceMotion?: boolean; quality?: boolean; npcs?: boolean } = {}) {
     if (opts.quality) {
       this.maxPixelRatio = this.pixelRatio = window.devicePixelRatio || 1;
       this.adaptive = false;
@@ -103,6 +129,7 @@ export class OfficeEngine {
     this.scene.add(sun);
 
     this.env = buildEnvironment(this.scene);
+    this.setNpcs(opts.npcs !== false);
     document.addEventListener('visibilitychange', this.onVisibility);
     window.addEventListener('focus', this.onFocus);
     window.addEventListener('blur', this.onBlur);
@@ -110,6 +137,12 @@ export class OfficeEngine {
 
   // ---------- state sync ----------
   sync(state: OfficeState) {
+    // The staff cheer when the Lead finishes a turn (not when opening an office that is already done).
+    const done = state.agents.lead?.status === 'done';
+    if (done && !this.leadDone && this.lastState) this.cheerUntil = performance.now() + CHEER_MS;
+    this.leadDone = done;
+    this.lastState = state;
+    if (state.todos !== this.lastTodos) { this.lastTodos = state.todos; this.env.drawBoard(state.todos); }
     const subs = state.order.filter((id) => id !== 'lead').map((id) => state.agents[id]);
     this.seats = nextSeats3d(this.seats, subs.map((a) => ({ id: a.id, done: a.status === 'done' })));
     // Light seats (and register extra floor laptops as obstacles) before planning walks.
@@ -129,6 +162,7 @@ export class OfficeEngine {
         this.chars.set(id, rig);
         this.scene.add(rig.root);
       }
+      if (id === 'lead') { this.syncLead(rig, a.status, a.tool, isNew); continue; }
       rig.setStatus(a.status);
       const pose = id === 'lead' ? { ...personFromAnchor(LEAD_ANCHOR), type: 'desk' as const } : seatPose(this.seats[id]);
       const cur = rig.seat;
@@ -143,6 +177,35 @@ export class OfficeEngine {
     }
 
     this.dirty = true;
+  }
+
+  /** Moves the Lead between its desk and the stations of its office, following what it does. */
+  private syncLead(rig: CharacterRig, status: OfficeState['agents'][string]['status'], tool: string | undefined, isNew: boolean) {
+    const now = performance.now();
+    const { plan, recheckAt } = planLead(status, tool, this.leadPlan, now);
+    this.leadPlan = plan;
+    clearTimeout(this.leadTimer);
+    if (recheckAt !== null) {
+      this.leadTimer = setTimeout(() => { if (this.lastState) this.sync(this.lastState); }, Math.max(50, recheckAt - now + 20));
+    }
+    const spot = plan.spot;
+    const station = spot === 'desk' ? null : SPOT_ACTIVITY[spot];
+    // Permission prompts and errors keep their own label; working at a station says what it does.
+    const keepStatusLabel = status === 'waiting' || status === 'error' || status === 'done' || status === 'idle';
+    rig.setStatus(status, station && !keepStatusLabel ? station.label : undefined);
+    rig.activity = station?.activity ?? null;
+    if (spot === this.leadAt && !isNew) return;
+    this.leadAt = spot;
+    const desk = { ...personFromAnchor(LEAD_ANCHOR), type: 'desk' as const };
+    const target = spot === 'desk' ? desk : { ...LEAD_STATIONS[spot], type: 'desk' as const };
+    if (isNew || this.reduceMotion || !rig.seat) {
+      if (spot === 'desk') rig.placeAt(desk); else rig.standAt(target);
+      return;
+    }
+    const start = rig.seated ? this.nav.standPoint(rig.seat) : { x: rig.root.position.x, z: rig.root.position.z };
+    const end = spot === 'desk' ? this.nav.standPoint(desk) : target;
+    rig.walkTo(target, this.nav.path(start, end), spot === 'desk');
+    this.shadowDirty = true;
   }
 
   private lightSeats(state: OfficeState) {
@@ -188,6 +251,62 @@ export class OfficeEngine {
       meshP.userData.curve = curve;
     }
     this.dirty = true;
+  }
+
+  /** Adds or removes the office staff. */
+  setNpcs(on: boolean) {
+    if (on === this.npcs.length > 0) return;
+    if (!on) {
+      for (const n of this.npcs) { this.scene.remove(n.rig.root); disposeTree(n.rig.root); }
+      this.npcs = [];
+    } else {
+      const now = performance.now();
+      this.npcs = NPCS.map((def, i) => {
+        const spot = spotById(def.start);
+        const rig = new CharacterRig(def.id, '', def.look);
+        rig.setTagVisible(false);
+        rig.activity = spot.activity;
+        rig.standAt(spot);
+        this.scene.add(rig.root);
+        // Stagger the first walks so they do not all set off together.
+        return { def, rig, spot, until: now + 4000 + i * 7000 + Math.random() * 4000, arrived: true };
+      });
+    }
+    this.shadowDirty = true;
+    this.dirty = true;
+  }
+
+  /** Sends one staff member to a spot now (visual checks); `stay` keeps them there for a minute. */
+  sendNpc(index: number, spotId: string, stay = 60_000) {
+    const n = this.npcs[index];
+    if (!n) return;
+    n.until = performance.now() + stay;
+    const next = spotById(spotId);
+    n.spot = next;
+    n.rig.activity = next.activity;
+    if (this.reduceMotion) { n.rig.standAt(next); return; }
+    n.arrived = false;
+    n.rig.walkTo({ ...next, type: 'desk' }, this.nav.path({ x: n.rig.root.position.x, z: n.rig.root.position.z }, next), false);
+  }
+
+  /** Sends idle staff to their next spot and sets what they do there. */
+  private stepNpcs(now: number) {
+    if (this.reduceMotion) return;
+    const cheer = now < this.cheerUntil;
+    for (const n of this.npcs) {
+      if (n.rig.isMoving) continue;
+      if (!n.arrived) { n.arrived = true; n.until = Math.max(n.until, now + dwellFor(Math.random)); }
+      n.rig.activity = cheer ? 'cheer' : n.spot.activity;
+      if (now < n.until || cheer) continue;
+      const taken = new Set(this.npcs.filter((o) => o !== n).map((o) => o.spot.id));
+      const next = nextSpot(n.spot.id, taken, Math.random);
+      const route = this.nav.path({ x: n.rig.root.position.x, z: n.rig.root.position.z }, next);
+      if (!route.length) { n.until = now + 5000; continue; }
+      n.spot = next;
+      n.arrived = false;
+      n.rig.activity = next.activity;
+      n.rig.walkTo({ ...next, type: 'desk' }, route, false);
+    }
   }
 
   // ---------- interaction ----------
@@ -250,7 +369,13 @@ export class OfficeEngine {
     if (c.target) this.target.set(...c.target);
     this.dirty = true;
   }
-  setReducedMotion(on: boolean) { this.reduceMotion = on; this.dirty = true; }
+  setReducedMotion(on: boolean) {
+    this.reduceMotion = on;
+    // Staff halfway through a walk step straight onto their spot.
+    if (on) for (const n of this.npcs) if (n.rig.isMoving) { n.rig.standAt(n.spot); n.arrived = true; n.rig.activity = n.spot.activity; }
+    this.shadowDirty = true;
+    this.dirty = true;
+  }
   /** Slow camera orbit (used as the lobby backdrop). */
   setAutoRotate(on: boolean) { this.autoRotate = on; this.dirty = true; }
   setMaxFps(fps: number) { this.maxFps = Math.max(5, Math.min(120, fps)); }
@@ -283,10 +408,13 @@ export class OfficeEngine {
   private frame(now: number) {
     // Render on demand: full rate only while something travels (walks, flights, orbit, user input),
     // a low rate for idle animations, nothing at all when nothing changes (reduced motion).
-    const walking = [...this.chars.values()].some((c) => c.isMoving);
-    const moving = walking || this.flights.length > 0 || (this.autoRotate && !this.reduceMotion);
-    if (!moving && this.reduceMotion && !this.dirty) { this.lastFrame = now; return; }
-    let cap = moving || this.dirty ? this.maxFps : Math.min(this.maxFps, IDLE_FPS);
+    this.stepNpcs(now);
+    const agentsWalking = [...this.chars.values()].some((c) => c.isMoving);
+    const npcsWalking = this.npcs.some((n) => n.rig.isMoving);
+    const walking = agentsWalking || npcsWalking;
+    const moving = agentsWalking || this.flights.length > 0 || (this.autoRotate && !this.reduceMotion);
+    if (!moving && !npcsWalking && this.reduceMotion && !this.dirty) { this.lastFrame = now; return; }
+    let cap = moving || this.dirty ? this.maxFps : Math.min(this.maxFps, npcsWalking ? NPC_WALK_FPS : IDLE_FPS);
     if (!this.focused) cap = Math.min(cap, BACKGROUND_FPS);
     if (now - this.lastRender < 1000 / cap - 2) return;
     const dtSec = frameStep(this.lastRender, now);
@@ -300,6 +428,13 @@ export class OfficeEngine {
     );
     this.camera.lookAt(this.target);
     for (const c of this.chars.values()) c.update(now, !this.reduceMotion);
+    for (const n of this.npcs) n.rig.update(now, !this.reduceMotion);
+    // Server rack LEDs flicker while the Lead runs commands there.
+    const busyRack = this.leadPlan.spot === 'rack' && !this.reduceMotion;
+    const tick = Math.floor(now / 110);
+    this.env.rackLeds.forEach((m, i) => {
+      m.emissiveIntensity = busyRack ? (((i * 7919 + tick * (i % 3 + 1) * 104729) % 10) > 4 ? 2.6 : 0.25) : 0.55;
+    });
     this.flights = this.flights.filter((f) => {
       const k = (now - f.start) / f.dur;
       if (k >= 1.25) { this.scene.remove(f.mesh, f.line); f.line.geometry.dispose(); (f.line.material as THREE.Material).dispose(); (f.mesh.material as THREE.Material).dispose(); return false; }
@@ -346,6 +481,7 @@ export class OfficeEngine {
 
   dispose() {
     this.stop();
+    clearTimeout(this.leadTimer);
     document.removeEventListener('visibilitychange', this.onVisibility);
     window.removeEventListener('focus', this.onFocus);
     window.removeEventListener('blur', this.onBlur);

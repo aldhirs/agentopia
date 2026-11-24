@@ -14,6 +14,21 @@ export interface Anchor { x: number; z: number; rotY: number }
 
 export const LEAD_ANCHOR: Anchor = { x: 7.6, z: -4.4, rotY: 0 };
 export const LESEHAN = { x: -6.3, z: 1.9 };
+
+/** Furniture in the lead office that the Lead walks to (see leadPlan.ts). */
+export const LEAD_ROOM = {
+  shelf: { x: 5.65, z: -6.2, w: 0.9, d: 0.4 },
+  rack: { x: 9.85, z: -6.1, w: 0.7, d: 0.6 },
+  board: { x: 7.6, z: -6.46, w: 2.2, h: 1.25, y: 1.72 },
+};
+/** Where the Lead stands for each activity, facing rotY (0 = towards +z, the glass front). */
+export const LEAD_STATIONS: Record<'shelf' | 'rack' | 'board' | 'front' | 'phone', { x: number; z: number; rotY: number }> = {
+  shelf: { x: 5.65, z: -5.45, rotY: Math.PI },
+  rack: { x: 9.85, z: -5.35, rotY: Math.PI },
+  board: { x: 6.6, z: -5.8, rotY: Math.atan2(7.6 - 6.6, -6.46 + 5.8) },
+  front: { x: 7.0, z: -3.35, rotY: 0 },
+  phone: { x: 9.0, z: -3.35, rotY: 0.35 },
+};
 /** Bean bags stand in a conversation circle, facing its centre, with room to walk between them. */
 export const BEAN_CIRCLE = { x: -1.0, z: 2.2, r: 1.45 };
 export const BEANBAGS: Array<{ x: number; z: number; rotY: number; color: string }> = (

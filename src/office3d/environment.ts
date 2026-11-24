@@ -2,7 +2,8 @@
 // lesehan, bean bags, billiard, coffee bar. Returns per-seat "devices" (screens + glow)
 // so the engine can light them in the colour of whoever sits there.
 import * as THREE from 'three';
-import { BEAN_CIRCLE, BEANBAGS, DESK_ANCHORS, FLOOR_ANCHORS, LEAD_ANCHOR, LESEHAN, PODS, type Anchor } from './layout';
+import type { TodoItem } from '../../shared/types';
+import { BEAN_CIRCLE, BEANBAGS, DESK_ANCHORS, FLOOR_ANCHORS, LEAD_ANCHOR, LEAD_ROOM, LESEHAN, PODS, type Anchor } from './layout';
 import { PLANTS } from './nav';
 import { box, canvasTexture, cyl, labelSprite, mat, mesh, sphere } from './kit';
 
@@ -18,6 +19,85 @@ export interface Environment {
   floors: SeatDevice[];
   lead: SeatDevice;
   makeLaptop(anchor: Anchor): SeatDevice;
+  /** Status LEDs of the server rack in the lead office (blink while the Lead runs commands). */
+  rackLeds: THREE.MeshStandardMaterial[];
+  /** Redraws the todo board in the lead office. */
+  drawBoard(todos: TodoItem[] | undefined): void;
+}
+
+const BOARD_COLS: Array<{ status: TodoItem['status']; title: string; note: string }> = [
+  { status: 'pending', title: 'Belum', note: '#FFE58A' },
+  { status: 'in_progress', title: 'Dikerjakan', note: '#A8D4FF' },
+  { status: 'completed', title: 'Selesai', note: '#B6EBC7' },
+];
+
+/** Whiteboard with sticky notes per todo status, drawn into a canvas texture. */
+function todoBoard(): { mesh: THREE.Mesh; draw(todos: TodoItem[] | undefined): void } {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1056; canvas.height = 600;
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  const g = canvas.getContext('2d')!;
+  const wrap = (text: string, maxW: number, lines: number): string[] => {
+    const words = text.split(/\s+/);
+    const out: string[] = [];
+    let cur = '';
+    for (const w of words) {
+      const next = cur ? `${cur} ${w}` : w;
+      if (g.measureText(next).width <= maxW) { cur = next; continue; }
+      if (cur) out.push(cur);
+      cur = w;
+      if (out.length === lines) break;
+    }
+    if (out.length < lines && cur) out.push(cur);
+    if (out.length === lines && words.join(' ') !== out.join(' ')) {
+      let last = out[lines - 1];
+      while (last.length && g.measureText(`${last}…`).width > maxW) last = last.slice(0, -1);
+      out[lines - 1] = `${last}…`;
+    }
+    return out.slice(0, lines);
+  };
+  const draw = (todos: TodoItem[] | undefined) => {
+    const W = canvas.width, H = canvas.height;
+    g.fillStyle = '#FBFAF7'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#2E2B36'; g.fillRect(0, H - 14, W, 14);
+    const colW = W / 3;
+    BOARD_COLS.forEach((col, ci) => {
+      const items = (todos ?? []).filter((t) => t.status === col.status);
+      const x0 = ci * colW;
+      if (ci) { g.fillStyle = 'rgba(46,43,54,.12)'; g.fillRect(x0, 22, 3, H - 60); }
+      g.fillStyle = '#2E2B36'; g.font = '600 34px Figtree, sans-serif'; g.textBaseline = 'alphabetic';
+      g.fillText(col.title, x0 + 28, 58);
+      g.fillStyle = 'rgba(46,43,54,.55)'; g.font = '600 28px Figtree, sans-serif';
+      g.fillText(String(items.length), x0 + 28 + g.measureText(col.title).width * (34 / 28) + 14, 58);
+      const shown = items.slice(0, 4);
+      shown.forEach((t, i) => {
+        const nx = x0 + 22 + (i % 2) * 6, ny = 82 + i * 116, nw = colW - 44, nh = 104;
+        g.save();
+        g.translate(nx + nw / 2, ny + nh / 2); g.rotate(((i * 7 + ci * 3) % 5 - 2) * 0.012); g.translate(-nw / 2, -nh / 2);
+        g.fillStyle = 'rgba(0,0,0,.10)'; g.fillRect(4, 6, nw, nh);
+        g.fillStyle = col.note; g.fillRect(0, 0, nw, nh);
+        g.fillStyle = '#2A2833'; g.font = '500 25px Figtree, sans-serif';
+        const text = col.status === 'in_progress' && t.activeForm ? t.activeForm : t.content;
+        wrap(text, nw - 28, 3).forEach((line, li) => g.fillText(line, 14, 34 + li * 29));
+        g.restore();
+      });
+      if (items.length > shown.length) {
+        g.fillStyle = 'rgba(46,43,54,.6)'; g.font = '600 26px Figtree, sans-serif';
+        g.fillText(`+${items.length - shown.length} lagi`, x0 + 28, H - 32);
+      }
+    });
+    if (!todos?.length) {
+      g.fillStyle = 'rgba(46,43,54,.4)'; g.font = '500 30px Figtree, sans-serif'; g.textAlign = 'center';
+      g.fillText('Daftar tugas Lead muncul di sini', W / 2, H / 2 + 20);
+      g.textAlign = 'left';
+    }
+    tex.needsUpdate = true;
+  };
+  draw(undefined);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(LEAD_ROOM.board.w, LEAD_ROOM.board.h), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7 }));
+  return { mesh: m, draw };
 }
 
 function glowWash(w: number, h: number) {
@@ -106,6 +186,43 @@ export function buildEnvironment(scene: THREE.Scene): Environment {
   glassWall(5.1, -6.5, 5.1, -3.3);
   glassWall(5.1, -2.4, 10.4, -2.4);
   const leadSign = add(labelSprite('Ruang Lead', '#EDBB4A', 1.5)); leadSign.position.set(7.75, 2.55, -2.4);
+
+  // Lead office furniture the Lead walks to: bookshelf (reading code), server rack (running
+  // commands) and the todo board on the back wall.
+  const { shelf, rack } = LEAD_ROOM;
+  const shelfG = add(new THREE.Group()); shelfG.position.set(shelf.x, 0, shelf.z);
+  const shelfWood = mat('#8A6240', 0.6);
+  at(shelfG, mesh(box(shelf.w, 1.9, 0.05), shelfWood)).position.set(0, 0.95, -shelf.d / 2 + 0.025);
+  for (const x of [-shelf.w / 2 + 0.025, shelf.w / 2 - 0.025]) at(shelfG, mesh(box(0.05, 1.9, shelf.d), shelfWood)).position.set(x, 0.95, 0);
+  const bookColors = ['#F78154', '#5DA9E9', '#F2C14E', '#4D9078', '#BC8BEE', '#E6E2DA', '#C0392B'];
+  for (let row = 0; row < 4; row++) {
+    const y = 0.08 + row * 0.46;
+    at(shelfG, mesh(box(shelf.w - 0.1, 0.04, shelf.d - 0.04), shelfWood, false)).position.set(0, y, 0.01);
+    let x = -shelf.w / 2 + 0.09;
+    for (let b = 0; x < shelf.w / 2 - 0.12; b++) {
+      const bw = 0.05 + ((row * 5 + b * 3) % 4) * 0.012, bh = 0.26 + ((row + b * 7) % 5) * 0.025;
+      const book = at(shelfG, mesh(box(bw, bh, 0.24), mat(bookColors[(row * 3 + b) % bookColors.length], 0.7), false));
+      book.position.set(x + bw / 2, y + 0.02 + bh / 2, 0.02);
+      if ((row + b) % 6 === 5) book.rotation.z = 0.18;
+      x += bw + 0.012;
+    }
+  }
+  const rackG = add(new THREE.Group()); rackG.position.set(rack.x, 0, rack.z);
+  at(rackG, mesh(box(rack.w, 1.85, rack.d), mat('#23222A', 0.45, 0.3))).position.y = 0.925;
+  const rackLeds: THREE.MeshStandardMaterial[] = [];
+  for (let u = 0; u < 7; u++) {
+    const y = 0.3 + u * 0.22;
+    at(rackG, mesh(box(rack.w - 0.08, 0.16, 0.01), mat('#33313B', 0.4, 0.4), false)).position.set(0, y, rack.d / 2 + 0.006);
+    for (let l = 0; l < 3; l++) {
+      const led = new THREE.MeshStandardMaterial({ color: '#111111', emissive: new THREE.Color(['#3DDC84', '#5FD0FF', '#FFB547'][l]), emissiveIntensity: 0.5 });
+      rackLeds.push(led);
+      at(rackG, new THREE.Mesh(box(0.035, 0.025, 0.01), led)).position.set(-rack.w / 2 + 0.1 + l * 0.06, y + 0.03, rack.d / 2 + 0.012);
+    }
+  }
+  const board = todoBoard();
+  board.mesh.position.set(LEAD_ROOM.board.x, LEAD_ROOM.board.y, LEAD_ROOM.board.z);
+  add(board.mesh);
+  add(mesh(box(LEAD_ROOM.board.w + 0.08, 0.05, 0.08), mat('#2E2B36', 0.5), false)).position.set(LEAD_ROOM.board.x, LEAD_ROOM.board.y - LEAD_ROOM.board.h / 2 - 0.03, LEAD_ROOM.board.z + 0.03);
 
   // Desks with monitors, keyboards and chairs.
   const deskTop = mat('#F4F1EA', 0.45);
@@ -242,5 +359,5 @@ export function buildEnvironment(scene: THREE.Scene): Environment {
     const leaf = add(mesh(sphere(0.5, 24, 16), mat(i % 2 ? '#5E9E5A' : '#77B36E', 0.9))); leaf.position.set(x, 0.85, z); leaf.scale.set(1, 1.2, 1);
   });
 
-  return { desks, floors, lead, makeLaptop };
+  return { desks, floors, lead, makeLaptop, rackLeds, drawBoard: board.draw };
 }

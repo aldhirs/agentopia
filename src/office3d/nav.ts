@@ -2,7 +2,7 @@
 // Furniture footprints mirror environment.ts; they are inflated by the body radius so a
 // walking character never clips through a desk, bean bag, table or plant.
 import {
-  BEANBAGS, DESK_ANCHORS, FLOOR_ANCHORS, LEAD_ANCHOR, LESEHAN, extraAnchor, personFromAnchor,
+  BEANBAGS, DESK_ANCHORS, FLOOR_ANCHORS, LEAD_ANCHOR, LEAD_ROOM, LESEHAN, extraAnchor, personFromAnchor,
   type Anchor, type SeatPose,
 } from './layout';
 
@@ -38,6 +38,8 @@ export function staticObstacles(): Shape[] {
   // Glass walls of the lead office (no seats inside it besides the lead's own).
   s.push({ kind: 'rect', x: 5.1, z: -4.9, w: 0.1, d: 3.2, rotY: 0 });
   s.push({ kind: 'rect', x: 7.75, z: -2.4, w: 5.3, d: 0.1, rotY: 0 });
+  // Bookshelf and server rack inside the lead office.
+  for (const f of [LEAD_ROOM.shelf, LEAD_ROOM.rack]) s.push({ kind: 'rect', x: f.x, z: f.z, w: f.w, d: f.d, rotY: 0 });
   // Lesehan low table, and the cushions of its seats.
   s.push({ kind: 'rect', x: LESEHAN.x, z: LESEHAN.z, w: 1.9, d: 1.0, rotY: 0 });
   for (const a of FLOOR_ANCHORS) s.push({ kind: 'circle', ...personFromAnchor(a), r: 0.3 });

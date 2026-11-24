@@ -70,6 +70,10 @@ function close() {
           <input type="checkbox" :checked="office.settings?.reduceMotion" @change="updateSettings({ reduceMotion: ($event.target as HTMLInputElement).checked })" />
           Kurangi animasi (karakter diam, kamera tidak bergerak sendiri)
         </label>
+        <label class="toggle">
+          <input type="checkbox" :checked="office.settings?.npcs !== false" @change="updateSettings({ npcs: ($event.target as HTMLInputElement).checked })" />
+          Staf kantor (ngopi, menyiram tanaman, main billiard; hanya hiasan di kantor 3D)
+        </label>
         <label for="s-font">Ukuran font terminal: {{ office.settings?.terminalFontSize }} px</label>
         <input
           id="s-font" type="range" min="10" max="20" step="1"
